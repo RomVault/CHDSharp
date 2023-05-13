@@ -1,0 +1,31 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.5.33627.172
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "CHDSharpLib", "CHDSharpLib\CHDSharpLib.csproj", "{DA6BBE7B-726E-4D35-8EA6-A4C39236E40D}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "CHDSharpTest", "CHDSharpTest\CHDSharpTest.csproj", "{77DAC679-9E8E-44DF-ADDE-D882AF5FC036}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{DA6BBE7B-726E-4D35-8EA6-A4C39236E40D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{DA6BBE7B-726E-4D35-8EA6-A4C39236E40D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{DA6BBE7B-726E-4D35-8EA6-A4C39236E40D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{DA6BBE7B-726E-4D35-8EA6-A4C39236E40D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{77DAC679-9E8E-44DF-ADDE-D882AF5FC036}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{77DAC679-9E8E-44DF-ADDE-D882AF5FC036}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{77DAC679-9E8E-44DF-ADDE-D882AF5FC036}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{77DAC679-9E8E-44DF-ADDE-D882AF5FC036}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {CB760153-2A82-46E7-ACCB-3BB7D2162A13}
+	EndGlobalSection
+EndGlobal

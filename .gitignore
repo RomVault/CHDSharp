@@ -1,0 +1,9 @@
+﻿################################################################################
+# This .gitignore file was automatically created by Microsoft(R) Visual Studio.
+################################################################################
+
+/CHDSharpLib/obj
+/CHDSharpLib/bin
+/CHDSharpTest/obj
+/CHDSharpTest/bin
+/.vs
