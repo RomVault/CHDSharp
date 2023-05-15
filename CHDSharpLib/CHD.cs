@@ -26,20 +26,19 @@ internal class mapentry
 {
     public compression_type comptype;
     public uint length; // length of compressed data
-    public ulong offset; // offset of compressed data in file.
+    public ulong offset; // offset of compressed data in file. Also index of source block for COMPRESSION_SELF 
     public uint? crc = null; // V3 & V4
     public ushort? crc16 = null; // V5
 
-    public mapentry sourceMapEntry;
+    public mapentry selfMapEntry; // link to self mapentry data used in COMPRESSION_SELF (replaces offset index)
 
     //Used to optimmize block reading so that any block in only decompressed once.
     public int UseCount;
 
-    public byte[] source = null;
-    public byte[] BlockCache = null;
-    public byte[] cache = null;
+    public byte[] buffIn = null;
+    public byte[] buffOutCache = null;
+    public byte[] buffOut = null;
 
-    public bool Procesed = false;
 }
 
 
@@ -145,6 +144,7 @@ public static class CHD
 
     internal static chd_error DecompressData(Stream file, CHDHeader chd)
     {
+        // stores the FLAC decompression classes for this instance.
         CHDCodec codec = new CHDCodec();
 
         using BinaryReader br = new BinaryReader(file, Encoding.UTF8, true);
@@ -162,8 +162,16 @@ public static class CHD
             if ((block % 1000) == 0)
                 Console.Write($"Verifying, {(100 - sizetoGo * 100 / chd.totalbytes):N1}% complete...\r");
 
+            mapentry mapEntry = chd.map[block];
+            if (mapEntry.length > 0)
+            {
+                mapEntry.buffIn = new byte[mapEntry.length];
+                file.Seek((long)mapEntry.offset, SeekOrigin.Begin);
+                file.Read(mapEntry.buffIn, 0, (int)mapEntry.length);
+            }
+
             /* read the block into the cache */
-            chd_error err = CHDBlockRead.ReadBlock(file, chd.map[block], chd.compression, codec, ref buffer);
+            chd_error err = CHDBlockRead.ReadBlock(mapEntry, chd.compression, codec, ref buffer);
             if (err != chd_error.CHDERR_NONE)
                 return err;
 
