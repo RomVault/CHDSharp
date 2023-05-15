@@ -198,9 +198,9 @@ internal static class CHDHeaders
 
     }
 
-    private static chd_error compressed_v5_map(BinaryReader br, ulong mapoffset, uint toalblocks, uint blocksize, uint unitbytes, out mapentry[] map)
+    private static chd_error compressed_v5_map(BinaryReader br, ulong mapoffset, uint totalBlocks, uint blocksize, uint unitbytes, out mapentry[] map)
     {
-        map = new mapentry[toalblocks];
+        map = new mapentry[totalBlocks];
 
         /* read the reader */
         br.BaseStream.Seek((long)mapoffset, SeekOrigin.Begin);
@@ -232,7 +232,7 @@ internal static class CHDHeaders
 
         int repcount = 0;
         compression_type lastcomp = 0;
-        for (uint blockIndex = 0; blockIndex < toalblocks; blockIndex++)
+        for (uint blockIndex = 0; blockIndex < totalBlocks; blockIndex++)
         {
             map[blockIndex] = new mapentry();
             if (repcount > 0)
@@ -263,7 +263,7 @@ internal static class CHDHeaders
         uint last_self = 0;
         ulong last_parent = 0;
         ulong curoffset = firstoffs;
-        for (uint blockIndex = 0; blockIndex < toalblocks; blockIndex++)
+        for (uint blockIndex = 0; blockIndex < totalBlocks; blockIndex++)
         {
             ulong offset = curoffset;
             uint length = 0;
@@ -323,8 +323,8 @@ internal static class CHDHeaders
 
 
         /* verify the final CRC */
-        byte[] rawmap = new byte[toalblocks * 12];
-        for (int blockIndex = 0; blockIndex < toalblocks; blockIndex++)
+        byte[] rawmap = new byte[totalBlocks * 12];
+        for (int blockIndex = 0; blockIndex < totalBlocks; blockIndex++)
         {
             int rawmapIndex = blockIndex * 12;
             rawmap[rawmapIndex] = (byte)map[blockIndex].comptype;
@@ -332,7 +332,7 @@ internal static class CHDHeaders
             rawmap.PutUInt48BE(rawmapIndex + 4, map[blockIndex].offset);
             rawmap.PutUInt16BE(rawmapIndex + 10, (uint)map[blockIndex].crc16);
         }
-        if (CRC16.calc(rawmap, (int)toalblocks * 12) != mapcrc)
+        if (CRC16.calc(rawmap, (int)totalBlocks * 12) != mapcrc)
             return chd_error.CHDERR_DECOMPRESSION_ERROR;
 
         return chd_error.CHDERR_NONE;

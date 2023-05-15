@@ -90,37 +90,30 @@ internal static partial class CHDReaders
 
 
 
-    internal static chd_error flac(byte[] source, byte[] cache)
+    internal static chd_error flac(byte[] source, byte[] cache, CHDCodec codec)
     {
         byte endianType = source[0];
         //CHD adds a leading char to indicate endian. Not part of the flac format.
         bool swapEndian = (endianType == 'B'); //'L'ittle / 'B'ig
-        return flac(source, 1, cache, swapEndian, out _);
+        return flac(source, 1, cache, swapEndian, codec, out _);
     }
-    internal static chd_error flac(byte[] source, int start, byte[] cache, bool swapEndian, out int srcPos)
-    {
-        //hard coded in libchdr
-        int sampleBits = 16;
-        int sampleRate = 44100;
-        int channels = 2;
 
-        AudioPCMConfig settings = new AudioPCMConfig(sampleBits, channels, sampleRate);
-        AudioDecoder audioDecoder = new AudioDecoder(settings); //read the data and decode it in to a 1D array of samples - the buffer seems to want 2D :S
-        AudioBuffer audioBuffer = new AudioBuffer(settings, cache.Length); //audio buffer to take decoded samples and read them to bytes.
-        int read;
+
+    internal static chd_error flac(byte[] source, int start, byte[] cache, bool swapEndian, CHDCodec codec, out int srcPos)
+    {
+        codec.FLAC_settings ??= new AudioPCMConfig(16, 2, 44100);
+        codec.FLAC_audioDecoder ??= new AudioDecoder(codec.FLAC_settings);
+        codec.FLAC_audioBuffer ??= new AudioBuffer(codec.FLAC_settings, cache.Length); //audio buffer to take decoded samples and read them to bytes.
+
         srcPos = start;
         int dstPos = 0;
         //this may require some error handling. Hopefully the while condition is reliable
         while (dstPos < cache.Length)
         {
-            if ((read = audioDecoder.DecodeFrame(source, srcPos, source.Length - srcPos)) == 0)
-                break;
-            if (audioDecoder.Remaining != 0)
-            {
-                audioDecoder.Read(audioBuffer, (int)audioDecoder.Remaining);
-                Array.Copy(audioBuffer.Bytes, 0, cache, dstPos, audioBuffer.ByteLength);
-                dstPos += audioBuffer.ByteLength;
-            }
+            int read = codec.FLAC_audioDecoder.DecodeFrame(source, srcPos, source.Length - srcPos);
+            codec.FLAC_audioDecoder.Read(codec.FLAC_audioBuffer, (int)codec.FLAC_audioDecoder.Remaining);
+            Array.Copy(codec.FLAC_audioBuffer.Bytes, 0, cache, dstPos, codec.FLAC_audioBuffer.ByteLength);
+            dstPos += codec.FLAC_audioBuffer.ByteLength;
             srcPos += read;
         }
 
@@ -235,14 +228,14 @@ internal static partial class CHDReaders
     }
 
 
-    internal static chd_error cdflac(byte[] source, byte[] dest)
+    internal static chd_error cdflac(byte[] source, byte[] dest, CHDCodec codec)
     {
         int frames = dest.Length / CD_FRAME_SIZE;
 
         byte[] bSector = new byte[frames * CD_MAX_SECTOR_DATA];
         byte[] bSubcode = new byte[frames * CD_MAX_SUBCODE_DATA];
 
-        chd_error err = flac(source, 0, bSector, true, out int pos);
+        chd_error err = flac(source, 0, bSector, true, codec, out int pos);
         if (err != chd_error.CHDERR_NONE)
             return err;
 

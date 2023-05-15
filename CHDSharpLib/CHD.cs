@@ -31,7 +31,7 @@ internal class mapentry
     public ushort? crc16 = null; // V5
 
     //Used to optimmize block reading so that any block in only decompressed once.
-    public uint UseCount;
+    public int UseCount;
 
     public byte[] source = null;
     public byte[] BlockCache = null;
@@ -143,6 +143,8 @@ public static class CHD
 
     internal static chd_error DecompressData(Stream file, CHDHeader chd)
     {
+        CHDCodec codec = new CHDCodec();
+
         using BinaryReader br = new BinaryReader(file, Encoding.UTF8, true);
 
         using MD5 md5Check = chd.md5 != null ? MD5.Create() : null;
@@ -159,7 +161,7 @@ public static class CHD
                 Console.Write($"Verifying, {(100 - sizetoGo * 100 / chd.totalbytes):N1}% complete...\r");
 
             /* read the block into the cache */
-            chd_error err = CHDBlockRead.ReadBlock(file, chd.compression, block, chd.map, (uint)chd.blocksize, ref buffer);
+            chd_error err = CHDBlockRead.ReadBlock(file, chd.compression, block, chd.map, (uint)chd.blocksize, codec, ref buffer);
             if (err != chd_error.CHDERR_NONE)
                 return err;
 

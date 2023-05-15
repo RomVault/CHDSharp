@@ -1,6 +1,8 @@
 ﻿using CHDSharpLib.Utils;
 using System;
 using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace CHDSharpLib
 {
@@ -14,12 +16,13 @@ namespace CHDSharpLib
         internal static void FindRepeatedBlocks(CHDHeader chd)
         {
             int totalFound = 0;
-            for (int i = 0; i < chd.map.Length; i++)
-            {
-                if (chd.map[i].comptype != compression_type.COMPRESSION_SELF)
-                    continue;
 
-                ulong sourceBlock = chd.map[i].offset;
+            Parallel.ForEach(chd.map, me =>
+            {
+                if (me.comptype != compression_type.COMPRESSION_SELF)
+                    return;
+
+                ulong sourceBlock = me.offset;
                 switch (chd.map[sourceBlock].comptype)
                 {
                     case compression_type.COMPRESSION_TYPE_0:
@@ -32,13 +35,15 @@ namespace CHDSharpLib
                         Console.WriteLine($"Error {chd.map[sourceBlock].comptype}");
                         break;
                 }
-                chd.map[sourceBlock].UseCount += 1;
-                totalFound++;
-            }
+
+                Interlocked.Increment(ref chd.map[sourceBlock].UseCount);
+                Interlocked.Increment(ref totalFound);
+            });
+
             Console.WriteLine($"Total Blocks {chd.map.Length}, Repeat Blocks {totalFound}");
         }
 
-        internal static chd_error ReadBlock(Stream file, chd_codec[] compression, int mapindex, mapentry[] map, uint blockSize, ref byte[] cache)
+        internal static chd_error ReadBlock(Stream file, chd_codec[] compression, int mapindex, mapentry[] map, uint blockSize, CHDCodec codec, ref byte[] cache)
         {
             bool checkCrc = true;
             long blockoffs;
@@ -66,78 +71,98 @@ namespace CHDSharpLib
                 case compression_type.COMPRESSION_TYPE_1:
                 case compression_type.COMPRESSION_TYPE_2:
                 case compression_type.COMPRESSION_TYPE_3:
-
-                    if (mapentry.BlockCache != null)
                     {
-                        Console.WriteLine("Error");
-                    }
-                    file.Seek((long)mapentry.offset, SeekOrigin.Begin);
-                    byte[] source = new byte[mapentry.length];
-                    file.Read(source, 0, source.Length);
+                        lock (mapentry)
+                        {
+                            if (mapentry.BlockCache == null)
+                            {
+                                file.Seek((long)mapentry.offset, SeekOrigin.Begin);
+                                byte[] source = new byte[mapentry.length];
+                                file.Read(source, 0, source.Length);
 
-                    chd_error ret = chd_error.CHDERR_UNSUPPORTED_FORMAT;
-                    switch (compression[(int)mapentry.comptype])
-                    {
-                        case chd_codec.CHD_CODEC_ZLIB:
-                            ret = CHDReaders.zlib(source, cache);
-                            break;
-                        case chd_codec.CHD_CODEC_LZMA:
-                            ret = CHDReaders.lzma(source, cache);
-                            break;
-                        case chd_codec.CHD_CODEC_HUFFMAN:
-                            ret = CHDReaders.huffman(source, cache);
-                            break;
-                        case chd_codec.CHD_CODEC_FLAC:
-                            ret = CHDReaders.flac(source, cache);
-                            break;
-                        case chd_codec.CHD_CODEC_CD_ZLIB:
-                            ret = CHDReaders.cdzlib(source, cache);
-                            break;
-                        case chd_codec.CHD_CODEC_CD_LZMA:
-                            ret = CHDReaders.cdlzma(source, cache);
-                            break;
-                        case chd_codec.CHD_CODEC_CD_FLAC:
-                            ret = CHDReaders.cdflac(source, cache);
-                            break;
-                        case chd_codec.CHD_CODEC_AVHUFF:
-                            ret = CHDReaders.avHuff(source, cache);
-                            break;
-                        default:
-                            Console.WriteLine("Unknown compression type");
-                            break;
-                    }
-                    if (ret != chd_error.CHDERR_NONE)
-                        return ret;
+                                chd_error ret = chd_error.CHDERR_UNSUPPORTED_FORMAT;
+                                switch (compression[(int)mapentry.comptype])
+                                {
+                                    case chd_codec.CHD_CODEC_ZLIB:
+                                        ret = CHDReaders.zlib(source, cache);
+                                        break;
+                                    case chd_codec.CHD_CODEC_LZMA:
+                                        ret = CHDReaders.lzma(source, cache);
+                                        break;
+                                    case chd_codec.CHD_CODEC_HUFFMAN:
+                                        ret = CHDReaders.huffman(source, cache);
+                                        break;
+                                    case chd_codec.CHD_CODEC_FLAC:
+                                        ret = CHDReaders.flac(source, cache, codec);
+                                        break;
+                                    case chd_codec.CHD_CODEC_CD_ZLIB:
+                                        ret = CHDReaders.cdzlib(source, cache);
+                                        break;
+                                    case chd_codec.CHD_CODEC_CD_LZMA:
+                                        ret = CHDReaders.cdlzma(source, cache);
+                                        break;
+                                    case chd_codec.CHD_CODEC_CD_FLAC:
+                                        ret = CHDReaders.cdflac(source, cache, codec);
+                                        break;
+                                    case chd_codec.CHD_CODEC_AVHUFF:
+                                        ret = CHDReaders.avHuff(source, cache, codec);
+                                        break;
+                                    default:
+                                        Console.WriteLine("Unknown compression type");
+                                        break;
+                                }
+                                if (ret != chd_error.CHDERR_NONE)
+                                    return ret;
 
-                    // if this block is re-used keep a copy of it.
-                    if (mapentry.UseCount > 0)
-                    {
-                        mapentry.BlockCache = new byte[blockSize];
-                        Array.Copy(cache, 0, mapentry.BlockCache, 0, blockSize);
-                    }
+                                // if this block is re-used keep a copy of it.
+                                if (mapentry.UseCount > 0)
+                                {
+                                    mapentry.BlockCache = new byte[blockSize];
+                                    Array.Copy(cache, 0, mapentry.BlockCache, 0, blockSize);
+                                }
 
-                    break;
+                                break;
+                            }
+                        }
+
+                        Array.Copy(mapentry.BlockCache, 0, cache, 0, (int)blockSize);
+                        mapentry.UseCount--;
+                        if (mapentry.UseCount == 0)
+                            mapentry.BlockCache = null;
+
+                        checkCrc = false;
+                        break;
+                    }
                 case compression_type.COMPRESSION_NONE:
                     {
-                        if (mapentry.BlockCache != null)
+                        lock (mapentry)
                         {
-                            Console.WriteLine("Error");
+                            if (mapentry.BlockCache == null)
+                            {
+                                file.Seek((long)mapentry.offset, SeekOrigin.Begin);
+                                if (mapentry.length != blockSize)
+                                    return chd_error.CHDERR_DECOMPRESSION_ERROR;
+
+                                int bytes = file.Read(cache, 0, (int)blockSize);
+                                if (bytes != (int)blockSize)
+                                    return chd_error.CHDERR_READ_ERROR;
+
+                                if (mapentry.UseCount > 0)
+                                {
+                                    mapentry.BlockCache = new byte[blockSize];
+                                    Array.Copy(cache, 0, mapentry.BlockCache, 0, blockSize);
+                                }
+                                break;
+                            }
                         }
 
-                        file.Seek((long)mapentry.offset, SeekOrigin.Begin);
-                        if (mapentry.length != blockSize)
-                            return chd_error.CHDERR_DECOMPRESSION_ERROR;
 
-                        int bytes = file.Read(cache, 0, (int)blockSize);
-                        if (bytes != (int)blockSize)
-                            return chd_error.CHDERR_READ_ERROR;
+                        Array.Copy(mapentry.BlockCache, 0, cache, 0, (int)blockSize);
+                        mapentry.UseCount--;
+                        if (mapentry.UseCount == 0)
+                            mapentry.BlockCache = null;
 
-                        if (mapentry.UseCount > 0)
-                        {
-                            mapentry.BlockCache = new byte[blockSize];
-                            Array.Copy(cache, 0, mapentry.BlockCache, 0, blockSize);
-                        }
-
+                        checkCrc = false;
                         break;
                     }
 
@@ -159,21 +184,8 @@ namespace CHDSharpLib
 
                 case compression_type.COMPRESSION_SELF:
                     {
-                        // we should have kept a copy of this block, if we knew it was going to be used again.
-                        int sourceIndex = (int)mapentry.offset;
-                        if (map[sourceIndex].BlockCache != null)
-                        {
-                            Array.Copy(map[sourceIndex].BlockCache, 0, cache, 0, (int)blockSize);
-
-                            map[sourceIndex].UseCount--;
-                            if (map[sourceIndex].UseCount == 0)
-                                map[sourceIndex].BlockCache = null;
-
-                            checkCrc = false;
-                            break;
-                        }
                         // should never hit here:
-                        chd_error retcs = ReadBlock(file, compression, (int)mapentry.offset, map, blockSize, ref cache);
+                        chd_error retcs = ReadBlock(file, compression, (int)mapentry.offset, map, blockSize, codec, ref cache);
                         if (retcs != chd_error.CHDERR_NONE)
                             return retcs;
                         // check CRC in the read_block_into_cache call

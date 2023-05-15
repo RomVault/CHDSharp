@@ -9,6 +9,11 @@ internal class Program
     {
         Stopwatch sw = new Stopwatch();
         sw.Start();
+
+        //CHD.TestCHD("D:\\bbh_v1.00.14a.chd");
+        //Console.WriteLine($"Done:  Time = {sw.Elapsed.TotalSeconds}");
+        //return;
+
         if (args.Length == 0)
         {
             Console.WriteLine("Expecting a Directory to Scan");

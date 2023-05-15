@@ -4,10 +4,13 @@ namespace CHDReaderTest.Flac.FlacDeps
     {
         private const ushort poly8 = 0x07;
 
-        private ushort[] table = new ushort[256];
+        private static ushort[] table = null;
 
         public Crc8()
         {
+            if (table != null)
+                return;
+            table = new ushort[256];
             int bits = 8;
             ushort poly = (ushort)(poly8 + (1U << bits));
             for (ushort i = 0; i < table.Length; i++)
