@@ -34,56 +34,56 @@ internal static partial class CHDReaders
 
     */
 
-    internal static chd_error avHuff(byte[] source, byte[] dest, CHDCodec codec)
+    internal static chd_error avHuff(byte[] buffIn, byte[] buffOut, CHDCodec codec)
     {
         // extract info from the header
-        if (source.Length < 8)
+        if (buffIn.Length < 8)
             return chd_error.CHDERR_INVALID_DATA;
-        uint metaDataLength = source[0];
-        uint audioChannels = source[1];
-        uint audioSamplesPerBlock = source.ReadUInt16BE(2);
-        uint videoWidth = source.ReadUInt16BE(4);
-        uint videoHeight = source.ReadUInt16BE(6);
+        uint metaDataLength = buffIn[0];
+        uint audioChannels = buffIn[1];
+        uint audioSamplesPerBlock = buffIn.ReadUInt16BE(2);
+        uint videoWidth = buffIn.ReadUInt16BE(4);
+        uint videoHeight = buffIn.ReadUInt16BE(6);
 
         uint sourceTotalSize = 10 + 2 * audioChannels;
         // validate that the sizes make sense
-        if (source.Length < sourceTotalSize)
+        if (buffIn.Length < sourceTotalSize)
             return chd_error.CHDERR_INVALID_DATA;
 
         sourceTotalSize += metaDataLength;
 
-        uint audioHuffmanTreeSize = source.ReadUInt16BE(8);
+        uint audioHuffmanTreeSize = buffIn.ReadUInt16BE(8);
         if (audioHuffmanTreeSize != 0xffff)
             sourceTotalSize += audioHuffmanTreeSize;
 
         uint?[] audioChannelCompressedSize = new uint?[16];
         for (int chnum = 0; chnum < audioChannels; chnum++)
         {
-            audioChannelCompressedSize[chnum] = source.ReadUInt16BE(10 + 2 * chnum);
+            audioChannelCompressedSize[chnum] = buffIn.ReadUInt16BE(10 + 2 * chnum);
             sourceTotalSize += (uint)audioChannelCompressedSize[chnum];
         }
 
-        if (sourceTotalSize >= source.Length)
+        if (sourceTotalSize >= buffIn.Length)
             return chd_error.CHDERR_INVALID_DATA;
 
         // starting offsets of source data
-        uint srcOffset = 10 + 2 * audioChannels;
+        uint buffInIndex = 10 + 2 * audioChannels;
 
 
         uint destOffset = 0;
         // create a header
-        dest[0] = (byte)'c';
-        dest[1] = (byte)'h';
-        dest[2] = (byte)'a';
-        dest[3] = (byte)'v';
-        dest[4] = (byte)metaDataLength;
-        dest[5] = (byte)audioChannels;
-        dest[6] = (byte)(audioSamplesPerBlock >> 8);
-        dest[7] = (byte)audioSamplesPerBlock;
-        dest[8] = (byte)(videoWidth >> 8);
-        dest[9] = (byte)videoWidth;
-        dest[10] = (byte)(videoHeight >> 8);
-        dest[11] = (byte)videoHeight;
+        buffOut[0] = (byte)'c';
+        buffOut[1] = (byte)'h';
+        buffOut[2] = (byte)'a';
+        buffOut[3] = (byte)'v';
+        buffOut[4] = (byte)metaDataLength;
+        buffOut[5] = (byte)audioChannels;
+        buffOut[6] = (byte)(audioSamplesPerBlock >> 8);
+        buffOut[7] = (byte)audioSamplesPerBlock;
+        buffOut[8] = (byte)(videoWidth >> 8);
+        buffOut[9] = (byte)videoWidth;
+        buffOut[10] = (byte)(videoHeight >> 8);
+        buffOut[11] = (byte)videoHeight;
         destOffset += 12;
 
 
@@ -91,8 +91,8 @@ internal static partial class CHDReaders
         uint metaDestStart = destOffset;
         if (metaDataLength > 0)
         {
-            Array.Copy(source, (int)srcOffset, dest, (int)metaDestStart, (int)metaDataLength);
-            srcOffset += metaDataLength;
+            Array.Copy(buffIn, (int)buffInIndex, buffOut, (int)metaDestStart, (int)metaDataLength);
+            buffInIndex += metaDataLength;
             destOffset += metaDataLength;
         }
 
@@ -109,15 +109,15 @@ internal static partial class CHDReaders
         if (audioChannels > 0)
         {
             // decode the audio
-            chd_error err = DecodeAudio(audioChannels, audioSamplesPerBlock, source, srcOffset, audioHuffmanTreeSize, audioChannelCompressedSize, dest, audioChannelDestStart, codec);
+            chd_error err = DecodeAudio(audioChannels, audioSamplesPerBlock, buffIn, buffInIndex, audioHuffmanTreeSize, audioChannelCompressedSize, buffOut, audioChannelDestStart, codec);
             if (err != chd_error.CHDERR_NONE)
                 return err;
 
             // advance the pointers past the data
             if (audioHuffmanTreeSize != 0xffff)
-                srcOffset += audioHuffmanTreeSize;
+                buffInIndex += audioHuffmanTreeSize;
             for (int chnum = 0; chnum < audioChannels; chnum++)
-                srcOffset += (uint)audioChannelCompressedSize[chnum];
+                buffInIndex += (uint)audioChannelCompressedSize[chnum];
         }
 
         // decode the video data
@@ -125,20 +125,20 @@ internal static partial class CHDReaders
         {
             uint videostride = 2 * videoWidth;
             // decode the video
-            chd_error err = decodeVideo(videoWidth, videoHeight, source, srcOffset, (uint)source.Length - srcOffset, dest, videoDestStart, videostride);
+            chd_error err = decodeVideo(videoWidth, videoHeight, buffIn, buffInIndex, (uint)buffIn.Length - buffInIndex, buffOut, videoDestStart, videostride);
             if (err != chd_error.CHDERR_NONE)
                 return err;
         }
 
         uint videoEnd = videoDestStart + videoWidth * videoHeight * 2;
-        for (uint index = videoEnd; index < dest.Length; index++)
-            dest[index] = 0;
+        for (uint index = videoEnd; index < buffOut.Length; index++)
+            buffOut[index] = 0;
 
         return chd_error.CHDERR_NONE;
     }
 
 
-    private static chd_error DecodeAudio(uint channels, uint samples, byte[] source, uint srcOffs, uint treesize, uint?[] audioChannelCompressedSize, byte[] dest, uint?[] audioChannelDestStart, CHDCodec codec)
+    private static chd_error DecodeAudio(uint channels, uint samples, byte[] buffIn, uint buffInOffset, uint treesize, uint?[] audioChannelCompressedSize, byte[] buffOut, uint?[] audioChannelDestStart, CHDCodec codec)
     {
         // if the tree size is 0xffff, the streams are FLAC-encoded
         if (treesize == 0xffff)
@@ -158,39 +158,39 @@ internal static partial class CHDReaders
                     codec.AVHUFF_audioDecoder ??= new AudioDecoder(codec.AVHUFF_settings); //read the data and decode it in to a 1D array of samples - the buffer seems to want 2D :S
                     AudioBuffer audioBuffer = new AudioBuffer(codec.AVHUFF_settings, blockSize); //audio buffer to take decoded samples and read them to bytes.
                     int read;
-                    int srcPos = (int)srcOffs;
-                    int dstPos = (int)audioChannelDestStart[channelNumber];
+                    int inPos = (int)buffInOffset;
+                    int outPos = (int)audioChannelDestStart[channelNumber];
 
-                    while (dstPos < blockSize + audioChannelDestStart[channelNumber])
+                    while (outPos < blockSize + audioChannelDestStart[channelNumber])
                     {
-                        if ((read = codec.AVHUFF_audioDecoder.DecodeFrame(source, srcPos, (int)sourceSize)) == 0)
+                        if ((read = codec.AVHUFF_audioDecoder.DecodeFrame(buffIn, inPos, (int)sourceSize)) == 0)
                             break;
                         if (codec.AVHUFF_audioDecoder.Remaining != 0)
                         {
                             codec.AVHUFF_audioDecoder.Read(audioBuffer, (int)codec.AVHUFF_audioDecoder.Remaining);
-                            Array.Copy(audioBuffer.Bytes, 0, dest, dstPos, audioBuffer.ByteLength);
-                            dstPos += audioBuffer.ByteLength;
+                            Array.Copy(audioBuffer.Bytes, 0, buffOut, outPos, audioBuffer.ByteLength);
+                            outPos += audioBuffer.ByteLength;
                         }
-                        srcPos += read;
+                        inPos += read;
                     }
 
                     byte tmp;
                     for (int i = (int)audioChannelDestStart[channelNumber]; i < blockSize + audioChannelDestStart[channelNumber]; i += 2)
                     {
-                        tmp = dest[i];
-                        dest[i] = dest[i + 1];
-                        dest[i + 1] = tmp;
+                        tmp = buffOut[i];
+                        buffOut[i] = buffOut[i + 1];
+                        buffOut[i + 1] = tmp;
                     }
 
                 }
 
                 // advance to the next channel's data
-                srcOffs += sourceSize;
+                buffInOffset += sourceSize;
             }
             return chd_error.CHDERR_NONE;
         }
 
-        BitStream bitbuf = new BitStream(source, (int)srcOffs);
+        BitStream bitbuf = new BitStream(buffIn, (int)buffInOffset);
         HuffmanDecoder m_audiohi_decoder = new HuffmanDecoder(256, 16, bitbuf);
         HuffmanDecoder m_audiolo_decoder = new HuffmanDecoder(256, 16, bitbuf);
 
@@ -206,7 +206,7 @@ internal static partial class CHDReaders
                 return chd_error.CHDERR_INVALID_DATA;
             if (bitbuf.flush() != treesize)
                 return chd_error.CHDERR_INVALID_DATA;
-            srcOffs += treesize;
+            buffInOffset += treesize;
         }
 
         // loop over channels
@@ -221,17 +221,17 @@ internal static partial class CHDReaders
                 // if no huffman length, just copy the data
                 if (treesize == 0)
                 {
-                    uint cursource = srcOffs;
+                    uint cursource = buffInOffset;
                     for (int sampnum = 0; sampnum < samples; sampnum++)
                     {
-                        int delta = (source[cursource + 0] << 8) | source[cursource + 1];
+                        int delta = (buffIn[cursource + 0] << 8) | buffIn[cursource + 1];
                         cursource += 2;
 
                         int newsample = prevsample + delta;
                         prevsample = newsample;
 
-                        dest[(uint)curdest + 0] = (byte)(newsample >> 8);
-                        dest[(uint)curdest + 1] = (byte)newsample;
+                        buffOut[(uint)curdest + 0] = (byte)(newsample >> 8);
+                        buffOut[(uint)curdest + 1] = (byte)newsample;
                         curdest += 2;
                     }
                 }
@@ -239,7 +239,7 @@ internal static partial class CHDReaders
                 // otherwise, Huffman-decode the data
                 else
                 {
-                    bitbuf = new BitStream(source, (int)srcOffs);
+                    bitbuf = new BitStream(buffIn, (int)buffInOffset);
                     m_audiohi_decoder.AssignBitStream(bitbuf);
                     m_audiolo_decoder.AssignBitStream(bitbuf);
                     for (int sampnum = 0; sampnum < samples; sampnum++)
@@ -250,8 +250,8 @@ internal static partial class CHDReaders
                         int newsample = prevsample + delta;
                         prevsample = newsample;
 
-                        dest[(uint)curdest + 0] = (byte)(newsample >> 8);
-                        dest[(uint)curdest + 1] = (byte)newsample;
+                        buffOut[(uint)curdest + 0] = (byte)(newsample >> 8);
+                        buffOut[(uint)curdest + 1] = (byte)newsample;
                         curdest += 2;
                     }
                     if (bitbuf.overflow())
@@ -260,28 +260,28 @@ internal static partial class CHDReaders
             }
 
             // advance to the next channel's data
-            srcOffs += (uint)audioChannelCompressedSize[chnum];
+            buffInOffset += (uint)audioChannelCompressedSize[chnum];
         }
         return chd_error.CHDERR_NONE;
     }
 
 
 
-    private static chd_error decodeVideo(uint width, uint height, byte[] source, uint sourceOffset, uint complength, byte[] dest, uint destOffset, uint dstride)
+    private static chd_error decodeVideo(uint width, uint height, byte[] buffIn, uint buffInOffset, uint buffInLength, byte[] buffOut, uint buffOutOffset, uint dstride)
     {
         // if the high bit of the first byte is set, we decode losslessly
-        if ((source[sourceOffset] & 0x80) != 0)
-            return DecodeVideoLossless(width, height, source, sourceOffset, complength, dest, destOffset, dstride);
+        if ((buffIn[buffInOffset] & 0x80) != 0)
+            return DecodeVideoLossless(width, height, buffIn, buffInOffset, buffInLength, buffOut, buffOutOffset, dstride);
         else
             return chd_error.CHDERR_INVALID_DATA;
     }
 
 
 
-    private static chd_error DecodeVideoLossless(uint width, uint height, byte[] source, uint sourceOffset, uint complength, byte[] dest, uint destOffset, uint dstride)
+    private static chd_error DecodeVideoLossless(uint width, uint height, byte[] buffIn, uint buffInOffset, uint buffInLength, byte[] buffOut, uint buffOutOffset, uint dstride)
     {
         // skip the first byte
-        BitStream bitbuf = new BitStream(source, (int)sourceOffset);
+        BitStream bitbuf = new BitStream(buffIn, (int)buffInOffset);
         bitbuf.read(8);
 
         HuffmanDecoderRLE m_ycontext = new HuffmanDecoderRLE(256 + 16, 16, bitbuf);
@@ -309,13 +309,13 @@ internal static partial class CHDReaders
 
         for (int dy = 0; dy < height; dy++)
         {
-            uint row = destOffset + (uint)dy * dstride;
+            uint row = buffOutOffset + (uint)dy * dstride;
             for (int dx = 0; dx < width / 2; dx++)
             {
-                dest[row + 0] = (byte)m_ycontext.DecodeOne();
-                dest[row + 1] = (byte)m_cbcontext.DecodeOne();
-                dest[row + 2] = (byte)m_ycontext.DecodeOne();
-                dest[row + 3] = (byte)m_crcontext.DecodeOne();
+                buffOut[row + 0] = (byte)m_ycontext.DecodeOne();
+                buffOut[row + 1] = (byte)m_cbcontext.DecodeOne();
+                buffOut[row + 2] = (byte)m_ycontext.DecodeOne();
+                buffOut[row + 3] = (byte)m_crcontext.DecodeOne();
                 row += 4;
             }
             m_ycontext.FlushRLE();
@@ -324,7 +324,7 @@ internal static partial class CHDReaders
         }
 
         // check for errors if we overflowed or decoded too little data
-        if (bitbuf.overflow() || bitbuf.flush() != complength)
+        if (bitbuf.overflow() || bitbuf.flush() != buffInLength)
             return chd_error.CHDERR_INVALID_DATA;
         return chd_error.CHDERR_NONE;
     }

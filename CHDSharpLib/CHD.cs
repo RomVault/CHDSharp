@@ -30,6 +30,8 @@ internal class mapentry
     public uint? crc = null; // V3 & V4
     public ushort? crc16 = null; // V5
 
+    public mapentry sourceMapEntry;
+
     //Used to optimmize block reading so that any block in only decompressed once.
     public int UseCount;
 
@@ -161,7 +163,7 @@ public static class CHD
                 Console.Write($"Verifying, {(100 - sizetoGo * 100 / chd.totalbytes):N1}% complete...\r");
 
             /* read the block into the cache */
-            chd_error err = CHDBlockRead.ReadBlock(file, chd.compression, block, chd.map, (uint)chd.blocksize, codec, ref buffer);
+            chd_error err = CHDBlockRead.ReadBlock(file, chd.map[block], chd.compression, codec, ref buffer);
             if (err != chd_error.CHDERR_NONE)
                 return err;
 

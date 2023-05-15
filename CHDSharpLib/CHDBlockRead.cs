@@ -22,8 +22,8 @@ namespace CHDSharpLib
                 if (me.comptype != compression_type.COMPRESSION_SELF)
                     return;
 
-                ulong sourceBlock = me.offset;
-                switch (chd.map[sourceBlock].comptype)
+                me.sourceMapEntry = chd.map[me.offset];
+                switch (me.sourceMapEntry.comptype)
                 {
                     case compression_type.COMPRESSION_TYPE_0:
                     case compression_type.COMPRESSION_TYPE_1:
@@ -32,35 +32,33 @@ namespace CHDSharpLib
                     case compression_type.COMPRESSION_NONE:
                         break;
                     default:
-                        Console.WriteLine($"Error {chd.map[sourceBlock].comptype}");
+                        Console.WriteLine($"Error {me.sourceMapEntry.comptype}");
                         break;
                 }
-
-                Interlocked.Increment(ref chd.map[sourceBlock].UseCount);
+                Interlocked.Increment(ref me.sourceMapEntry.UseCount);
                 Interlocked.Increment(ref totalFound);
             });
 
             Console.WriteLine($"Total Blocks {chd.map.Length}, Repeat Blocks {totalFound}");
         }
 
-        internal static chd_error ReadBlock(Stream file, chd_codec[] compression, int mapindex, mapentry[] map, uint blockSize, CHDCodec codec, ref byte[] cache)
+        internal static chd_error ReadBlock(Stream file, mapentry mapentry, chd_codec[] compression,  CHDCodec codec, ref byte[] buffOut)
         {
             bool checkCrc = true;
-            long blockoffs;
-            mapentry mapentry = map[mapindex];
+            uint blockSize =(uint)buffOut.Length;
 
             if (compression[0] == chd_codec.CHD_CODEC_NONE)
             {
-                blockoffs = (long)mapentry.offset * blockSize;
+                long blockoffs = (long)mapentry.offset * blockSize;
                 if (blockoffs != 0)
                 {
                     file.Seek((long)blockoffs, SeekOrigin.Begin);
-                    file.Read(cache, 0, (int)blockSize);
+                    file.Read(buffOut, 0, (int)blockSize);
                 }
                 else
                 {
                     for (int j = 0; j < blockSize; j++)
-                        cache[j] = 0;
+                        buffOut[j] = 0;
                 }
                 return chd_error.CHDERR_NONE;
             }
@@ -77,35 +75,35 @@ namespace CHDSharpLib
                             if (mapentry.BlockCache == null)
                             {
                                 file.Seek((long)mapentry.offset, SeekOrigin.Begin);
-                                byte[] source = new byte[mapentry.length];
-                                file.Read(source, 0, source.Length);
+                                byte[] buffIn = new byte[mapentry.length];
+                                file.Read(buffIn, 0, buffIn.Length);
 
                                 chd_error ret = chd_error.CHDERR_UNSUPPORTED_FORMAT;
                                 switch (compression[(int)mapentry.comptype])
                                 {
                                     case chd_codec.CHD_CODEC_ZLIB:
-                                        ret = CHDReaders.zlib(source, cache);
+                                        ret = CHDReaders.zlib(buffIn, buffOut);
                                         break;
                                     case chd_codec.CHD_CODEC_LZMA:
-                                        ret = CHDReaders.lzma(source, cache);
+                                        ret = CHDReaders.lzma(buffIn, buffOut);
                                         break;
                                     case chd_codec.CHD_CODEC_HUFFMAN:
-                                        ret = CHDReaders.huffman(source, cache);
+                                        ret = CHDReaders.huffman(buffIn, buffOut);
                                         break;
                                     case chd_codec.CHD_CODEC_FLAC:
-                                        ret = CHDReaders.flac(source, cache, codec);
+                                        ret = CHDReaders.flac(buffIn, buffOut, codec);
                                         break;
                                     case chd_codec.CHD_CODEC_CD_ZLIB:
-                                        ret = CHDReaders.cdzlib(source, cache);
+                                        ret = CHDReaders.cdzlib(buffIn, buffOut);
                                         break;
                                     case chd_codec.CHD_CODEC_CD_LZMA:
-                                        ret = CHDReaders.cdlzma(source, cache);
+                                        ret = CHDReaders.cdlzma(buffIn, buffOut);
                                         break;
                                     case chd_codec.CHD_CODEC_CD_FLAC:
-                                        ret = CHDReaders.cdflac(source, cache, codec);
+                                        ret = CHDReaders.cdflac(buffIn, buffOut, codec);
                                         break;
                                     case chd_codec.CHD_CODEC_AVHUFF:
-                                        ret = CHDReaders.avHuff(source, cache, codec);
+                                        ret = CHDReaders.avHuff(buffIn, buffOut, codec);
                                         break;
                                     default:
                                         Console.WriteLine("Unknown compression type");
@@ -118,14 +116,14 @@ namespace CHDSharpLib
                                 if (mapentry.UseCount > 0)
                                 {
                                     mapentry.BlockCache = new byte[blockSize];
-                                    Array.Copy(cache, 0, mapentry.BlockCache, 0, blockSize);
+                                    Array.Copy(buffOut, 0, mapentry.BlockCache, 0, blockSize);
                                 }
 
                                 break;
                             }
                         }
 
-                        Array.Copy(mapentry.BlockCache, 0, cache, 0, (int)blockSize);
+                        Array.Copy(mapentry.BlockCache, 0, buffOut, 0, (int)blockSize);
                         mapentry.UseCount--;
                         if (mapentry.UseCount == 0)
                             mapentry.BlockCache = null;
@@ -143,21 +141,21 @@ namespace CHDSharpLib
                                 if (mapentry.length != blockSize)
                                     return chd_error.CHDERR_DECOMPRESSION_ERROR;
 
-                                int bytes = file.Read(cache, 0, (int)blockSize);
+                                int bytes = file.Read(buffOut, 0, (int)blockSize);
                                 if (bytes != (int)blockSize)
                                     return chd_error.CHDERR_READ_ERROR;
 
                                 if (mapentry.UseCount > 0)
                                 {
                                     mapentry.BlockCache = new byte[blockSize];
-                                    Array.Copy(cache, 0, mapentry.BlockCache, 0, blockSize);
+                                    Array.Copy(buffOut, 0, mapentry.BlockCache, 0, blockSize);
                                 }
                                 break;
                             }
                         }
 
 
-                        Array.Copy(mapentry.BlockCache, 0, cache, 0, (int)blockSize);
+                        Array.Copy(mapentry.BlockCache, 0, buffOut, 0, (int)blockSize);
                         mapentry.UseCount--;
                         if (mapentry.UseCount == 0)
                             mapentry.BlockCache = null;
@@ -171,12 +169,12 @@ namespace CHDSharpLib
                         byte[] tmp = BitConverter.GetBytes(mapentry.offset);
                         for (int i = 0; i < 8; i++)
                         {
-                            cache[i] = tmp[7 - i];
+                            buffOut[i] = tmp[7 - i];
                         }
 
                         for (int i = 8; i < blockSize; i++)
                         {
-                            cache[i] = cache[i - 8];
+                            buffOut[i] = buffOut[i - 8];
                         }
 
                         break;
@@ -185,7 +183,7 @@ namespace CHDSharpLib
                 case compression_type.COMPRESSION_SELF:
                     {
                         // should never hit here:
-                        chd_error retcs = ReadBlock(file, compression, (int)mapentry.offset, map, blockSize, codec, ref cache);
+                        chd_error retcs = ReadBlock(file, mapentry.sourceMapEntry, compression, codec, ref buffOut);
                         if (retcs != chd_error.CHDERR_NONE)
                             return retcs;
                         // check CRC in the read_block_into_cache call
@@ -199,9 +197,9 @@ namespace CHDSharpLib
 
             if (checkCrc)
             {
-                if (mapentry.crc != null && !CRC.VerifyDigest((uint)mapentry.crc, cache, 0, blockSize))
+                if (mapentry.crc != null && !CRC.VerifyDigest((uint)mapentry.crc, buffOut, 0, blockSize))
                     return chd_error.CHDERR_DECOMPRESSION_ERROR;
-                if (mapentry.crc16 != null && CRC16.calc(cache, (int)blockSize) != mapentry.crc16)
+                if (mapentry.crc16 != null && CRC16.calc(buffOut, (int)blockSize) != mapentry.crc16)
                     return chd_error.CHDERR_DECOMPRESSION_ERROR;
             }
             return chd_error.CHDERR_NONE;
