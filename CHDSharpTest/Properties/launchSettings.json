@@ -2,7 +2,7 @@
   "profiles": {
     "CHDSharpTest": {
       "commandName": "Project",
-      "commandLineArgs": "\"\\\\10.0.4.11\\d$\\RomVaultCHD\\RomRoot\\MAME - CHDs\\MAME CHDs (merged)\""
+      "commandLineArgs": "\"E:\\RomVault\\RomRoot\\MAME - CHDs\""
     }
   }
 }

@@ -1,6 +1,5 @@
 ﻿using CHDSharpLib.Utils;
 using System;
-using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -106,7 +105,7 @@ namespace CHDSharpLib
                         }
 
                         Array.Copy(mapentry.buffOutCache, 0, buffOut, 0, (int)blockSize);
-                        mapentry.UseCount--;
+                        Interlocked.Decrement(ref mapentry.UseCount);
                         if (mapentry.UseCount == 0)
                             mapentry.buffOutCache = null;
 
@@ -133,7 +132,7 @@ namespace CHDSharpLib
 
 
                         Array.Copy(mapentry.buffOutCache, 0, buffOut, 0, (int)blockSize);
-                        mapentry.UseCount--;
+                        Interlocked.Decrement(ref mapentry.UseCount);
                         if (mapentry.UseCount == 0)
                             mapentry.buffOutCache = null;
 
