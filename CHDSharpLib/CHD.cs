@@ -1,8 +1,10 @@
 ﻿using CHDSharpLib.Utils;
 using System;
+using System.Collections.Concurrent;
 using System.IO;
 using System.Security.Cryptography;
 using System.Text;
+using System.Threading.Tasks;
 
 namespace CHDSharpLib;
 
@@ -38,6 +40,9 @@ internal class mapentry
     public byte[] buffIn = null;
     public byte[] buffOutCache = null;
     public byte[] buffOut = null;
+
+    // Used in Parallel decompress to keep the blocks in order when hashing.
+    public bool Processed = false;
 
 }
 
@@ -90,7 +95,7 @@ public static class CHD
 
             CHDBlockRead.FindRepeatedBlocks(chd);
 
-            valid = DecompressData(s, chd);
+            valid = DecompressDataParallel(s, chd);
             if (valid != chd_error.CHDERR_NONE)
             {
                 SendMessage($"Data Decompress Failed: {valid}", ConsoleColor.Red);
@@ -203,4 +208,130 @@ public static class CHD
 
         return chd_error.CHDERR_NONE;
     }
+
+
+
+
+    internal static chd_error DecompressDataParallel(Stream file, CHDHeader chd)
+    {
+        using BinaryReader br = new BinaryReader(file, Encoding.UTF8, true);
+
+        using MD5 md5Check = chd.md5 != null ? MD5.Create() : null;
+        using SHA1 sha1Check = chd.rawsha1 != null ? SHA1.Create() : null;
+
+        int taskCount = 4;
+        BlockingCollection<int> bCollection = new BlockingCollection<int>(boundedCapacity: taskCount * 5);
+        BlockingCollection<int> bCleanup = new BlockingCollection<int>(boundedCapacity: taskCount * 5);
+        chd_error errMaster = chd_error.CHDERR_NONE;
+
+        Task producerThread = Task.Factory.StartNew(() =>
+        {
+            for (int block = 0; block < chd.totalblocks; block++)
+            {
+                if (errMaster != chd_error.CHDERR_NONE)
+                    break;
+
+                /* progress */
+                if ((block % 1000) == 0)
+                    Console.Write($"Verifying, {(long)block * 100 / chd.totalblocks:N1}% complete...\r");
+
+                mapentry mapentry = chd.map[block];
+
+                if (mapentry.length > 0)
+                {
+                    file.Seek((long)mapentry.offset, SeekOrigin.Begin);
+                    mapentry.buffIn = new byte[mapentry.length];
+                    file.Read(mapentry.buffIn, 0, (int)mapentry.length);
+                }
+                mapentry.buffOut = new byte[chd.blocksize];
+
+                bCollection.Add(block);
+            }
+            for (int i = 0; i < taskCount; i++)
+                bCollection.Add(-1);
+        });
+
+        for (int i = 0; i < taskCount; i++)
+        {
+            Task consumerThread1 = Task.Factory.StartNew(() =>
+            {
+                CHDCodec codec = new CHDCodec();
+                while (true)
+                {
+                    int block = bCollection.Take();
+                    if (block == -1)
+                        return;
+                    mapentry mapentry = chd.map[block];
+                    chd_error err = CHDBlockRead.ReadBlock(mapentry, chd.compression, codec, ref mapentry.buffOut);
+                    if (err != chd_error.CHDERR_NONE)
+                    {
+                        bCollection.TryTake(out int tmpitem, 1);
+                        bCleanup.Add(-1);
+                        errMaster = err;
+                        return;
+                    }
+                    bCleanup.Add(block);
+                }
+            });
+        }
+
+        ulong sizetoGo = chd.totalbytes;
+        int proc = 0;
+        Task cleanupThread = Task.Factory.StartNew(() =>
+        {
+            while (true)
+            {
+                int item = bCleanup.Take();
+                if (item == -1)
+                    return;
+
+                chd.map[item].Processed = true;
+                while (chd.map[proc].Processed == true)
+                {
+                    int sizenext = sizetoGo > (ulong)chd.blocksize ? (int)chd.blocksize : (int)sizetoGo;
+
+                    mapentry mapentry = chd.map[proc];
+
+                    md5Check?.TransformBlock(mapentry.buffOut, 0, sizenext, null, 0);
+                    sha1Check?.TransformBlock(mapentry.buffOut, 0, sizenext, null, 0);
+
+                    mapentry.buffIn = null;
+                    mapentry.buffOut = null;
+
+                    /* prepare for the next block */
+                    sizetoGo -= (ulong)sizenext;
+
+                    proc++;
+                    if (proc == chd.totalblocks)
+                        break;
+                }
+                if (proc == chd.totalblocks)
+                    break;
+            }
+        });
+
+        Task.WaitAll(cleanupThread);
+
+        Console.WriteLine($"Verifying, 100% complete.");
+
+        if (errMaster != chd_error.CHDERR_NONE)
+            return errMaster;
+
+        byte[] tmp = new byte[0];
+        md5Check?.TransformFinalBlock(tmp, 0, 0);
+        sha1Check?.TransformFinalBlock(tmp, 0, 0);
+
+        // here it is now using the rawsha1 value from the header to validate the raw binary data.
+        if (chd.md5 != null && !Util.ByteArrEquals(chd.md5, md5Check.Hash))
+        {
+            return chd_error.CHDERR_DECOMPRESSION_ERROR;
+        }
+        if (chd.rawsha1 != null && !Util.ByteArrEquals(chd.rawsha1, sha1Check.Hash))
+        {
+            return chd_error.CHDERR_DECOMPRESSION_ERROR;
+        }
+
+        return chd_error.CHDERR_NONE;
+    }
+
 }
