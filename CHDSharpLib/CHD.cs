@@ -219,7 +219,7 @@ public static class CHD
         using MD5 md5Check = chd.md5 != null ? MD5.Create() : null;
         using SHA1 sha1Check = chd.rawsha1 != null ? SHA1.Create() : null;
 
-        int taskCount = 7;
+        int taskCount = 4;
         BlockingCollection<int> bCollection = new BlockingCollection<int>(boundedCapacity: taskCount * 5);
         BlockingCollection<int> bCleanup = new BlockingCollection<int>(boundedCapacity: taskCount * 5);
         chd_error errMaster = chd_error.CHDERR_NONE;
