@@ -219,21 +219,22 @@ public static class CHD
         using MD5 md5Check = chd.md5 != null ? MD5.Create() : null;
         using SHA1 sha1Check = chd.rawsha1 != null ? SHA1.Create() : null;
 
-        int taskCount = 4;
+        int taskCount = 7;
         BlockingCollection<int> bCollection = new BlockingCollection<int>(boundedCapacity: taskCount * 5);
         BlockingCollection<int> bCleanup = new BlockingCollection<int>(boundedCapacity: taskCount * 5);
         chd_error errMaster = chd_error.CHDERR_NONE;
 
         Task producerThread = Task.Factory.StartNew(() =>
         {
+            uint blockPercent = chd.totalblocks / 100;
             for (int block = 0; block < chd.totalblocks; block++)
             {
                 if (errMaster != chd_error.CHDERR_NONE)
                     break;
 
                 /* progress */
-                if ((block % 1000) == 0)
-                    Console.Write($"Verifying, {(long)block * 100 / chd.totalblocks:N1}% complete...\r");
+                if ((block % blockPercent) == 0)
+                    Console.Write($"Verifying, {(long)block * 100 / chd.totalblocks:N1}% complete...Load buffer: {bCollection.Count} Hash buffer: {bCleanup.Count}   \r");
 
                 mapentry mapentry = chd.map[block];
 
