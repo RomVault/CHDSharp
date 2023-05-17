@@ -227,6 +227,8 @@ public static class CHD
         Task producerThread = Task.Factory.StartNew(() =>
         {
             uint blockPercent = chd.totalblocks / 100;
+            if (blockPercent == 0)
+                blockPercent = 1;
             for (int block = 0; block < chd.totalblocks; block++)
             {
                 if (errMaster != chd_error.CHDERR_NONE)
