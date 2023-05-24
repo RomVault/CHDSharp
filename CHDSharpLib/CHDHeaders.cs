@@ -21,7 +21,7 @@ internal static class CHDHeaders
         uint heads = br.ReadUInt32BE();
         uint sectors = br.ReadUInt32BE();
         chd.md5 = br.ReadBytes(16);
-        byte[] parentmd5 = br.ReadBytes(16);
+        chd.parentmd5 = br.ReadBytes(16);
 
 
         const int HARD_DISK_SECTOR_SIZE = 512;
@@ -60,7 +60,7 @@ internal static class CHDHeaders
         uint heads = br.ReadUInt32BE();
         uint sectors = br.ReadUInt32BE();
         chd.md5 = br.ReadBytes(16);
-        byte[] parentmd5 = br.ReadBytes(16);
+        chd.parentmd5 = br.ReadBytes(16);
         chd.blocksize = br.ReadUInt32BE(); // blocksize added to header in V2
 
         const int HARD_DISK_SECTOR_SIZE = 512;
@@ -97,10 +97,10 @@ internal static class CHDHeaders
         chd.metaoffset = br.ReadUInt64BE();
 
         chd.md5 = br.ReadBytes(16);
-        byte[] parentmd5 = br.ReadBytes(16);
+        chd.parentmd5 = br.ReadBytes(16);
         chd.blocksize = br.ReadUInt32BE();    // length of a CHD Block
         chd.rawsha1 = br.ReadBytes(20);
-        byte[] parentsha1 = br.ReadBytes(20);
+        chd.parentsha1 = br.ReadBytes(20);
 
         chd.map = new mapentry[chd.totalblocks];
 
@@ -133,7 +133,7 @@ internal static class CHDHeaders
 
         chd.blocksize = br.ReadUInt32BE();    // length of a CHD Block
         chd.sha1 = br.ReadBytes(20);
-        byte[] parentsha1 = br.ReadBytes(20);
+        chd.parentsha1 = br.ReadBytes(20);
         chd.rawsha1 = br.ReadBytes(20);
 
         chd.map = new mapentry[chd.totalblocks];
@@ -169,7 +169,7 @@ internal static class CHDHeaders
         uint unitbytes = br.ReadUInt32BE();
         chd.rawsha1 = br.ReadBytes(20);
         chd.sha1 = br.ReadBytes(20);
-        byte[] parentsha1 = br.ReadBytes(20);
+        chd.parentsha1 = br.ReadBytes(20);
 
         chd.totalblocks = (uint)((chd.totalbytes + chd.blocksize - 1) / chd.blocksize);
 

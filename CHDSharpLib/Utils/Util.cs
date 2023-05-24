@@ -2,6 +2,15 @@
 
 internal static class Util
 {
+    internal static bool IsAllZeroArray(byte[] b)
+    {
+        if (b == null) return true;
+        for (int i = 0; i < b.Length; i++)
+            if (b[i] != 0) return false;
+
+        return true;
+    }
+
     internal static bool ByteArrEquals(byte[] b0, byte[] b1)
     {
         if ((b0 == null) || (b1 == null))

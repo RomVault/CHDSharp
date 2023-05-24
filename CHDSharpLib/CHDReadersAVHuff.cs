@@ -34,10 +34,10 @@ internal static partial class CHDReaders
 
     */
 
-    internal static chd_error avHuff(byte[] buffIn, byte[] buffOut, CHDCodec codec)
+    internal static chd_error avHuff(byte[] buffIn,int buffInLength, byte[] buffOut,int buffOutLength, CHDCodec codec)
     {
         // extract info from the header
-        if (buffIn.Length < 8)
+        if (buffInLength < 8)
             return chd_error.CHDERR_INVALID_DATA;
         uint metaDataLength = buffIn[0];
         uint audioChannels = buffIn[1];
@@ -47,7 +47,7 @@ internal static partial class CHDReaders
 
         uint sourceTotalSize = 10 + 2 * audioChannels;
         // validate that the sizes make sense
-        if (buffIn.Length < sourceTotalSize)
+        if (buffInLength < sourceTotalSize)
             return chd_error.CHDERR_INVALID_DATA;
 
         sourceTotalSize += metaDataLength;
@@ -63,7 +63,7 @@ internal static partial class CHDReaders
             sourceTotalSize += (uint)audioChannelCompressedSize[chnum];
         }
 
-        if (sourceTotalSize >= buffIn.Length)
+        if (sourceTotalSize >= buffInLength)
             return chd_error.CHDERR_INVALID_DATA;
 
         // starting offsets of source data
@@ -125,13 +125,13 @@ internal static partial class CHDReaders
         {
             uint videostride = 2 * videoWidth;
             // decode the video
-            chd_error err = decodeVideo(videoWidth, videoHeight, buffIn, buffInIndex, (uint)buffIn.Length - buffInIndex, buffOut, videoDestStart, videostride);
+            chd_error err = decodeVideo(videoWidth, videoHeight, buffIn, buffInIndex, (uint)buffInLength - buffInIndex, buffOut, videoDestStart, videostride);
             if (err != chd_error.CHDERR_NONE)
                 return err;
         }
 
         uint videoEnd = videoDestStart + videoWidth * videoHeight * 2;
-        for (uint index = videoEnd; index < buffOut.Length; index++)
+        for (uint index = videoEnd; index < buffOutLength; index++)
             buffOut[index] = 0;
 
         return chd_error.CHDERR_NONE;
