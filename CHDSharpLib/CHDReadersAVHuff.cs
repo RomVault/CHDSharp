@@ -34,7 +34,7 @@ internal static partial class CHDReaders
 
     */
 
-    internal static chd_error avHuff(byte[] buffIn,int buffInLength, byte[] buffOut,int buffOutLength, CHDCodec codec)
+    internal static chd_error avHuff(byte[] buffIn, int buffInLength, byte[] buffOut, int buffOutLength, CHDCodec codec)
     {
         // extract info from the header
         if (buffInLength < 8)
@@ -190,13 +190,16 @@ internal static partial class CHDReaders
             return chd_error.CHDERR_NONE;
         }
 
-        BitStream bitbuf = new BitStream(buffIn, (int)buffInOffset);
-        HuffmanDecoder m_audiohi_decoder = new HuffmanDecoder(256, 16, bitbuf);
-        HuffmanDecoder m_audiolo_decoder = new HuffmanDecoder(256, 16, bitbuf);
 
         // if we have a non-zero tree size, extract the trees
+        HuffmanDecoder m_audiohi_decoder = null;
+        HuffmanDecoder m_audiolo_decoder = null;
         if (treesize != 0)
         {
+            BitStream bitbuf = new BitStream(buffIn, (int)buffInOffset, (int)treesize);
+            m_audiohi_decoder = new HuffmanDecoder(256, 16, bitbuf);
+            m_audiolo_decoder = new HuffmanDecoder(256, 16, bitbuf);
+
             huffman_error hufferr = m_audiohi_decoder.ImportTreeRLE();
             if (hufferr != huffman_error.HUFFERR_NONE)
                 return chd_error.CHDERR_INVALID_DATA;
@@ -239,7 +242,7 @@ internal static partial class CHDReaders
                 // otherwise, Huffman-decode the data
                 else
                 {
-                    bitbuf = new BitStream(buffIn, (int)buffInOffset);
+                    BitStream bitbuf = new BitStream(buffIn, (int)buffInOffset, (int)audioChannelCompressedSize[chnum]);
                     m_audiohi_decoder.AssignBitStream(bitbuf);
                     m_audiolo_decoder.AssignBitStream(bitbuf);
                     for (int sampnum = 0; sampnum < samples; sampnum++)
@@ -281,7 +284,7 @@ internal static partial class CHDReaders
     private static chd_error DecodeVideoLossless(uint width, uint height, byte[] buffIn, uint buffInOffset, uint buffInLength, byte[] buffOut, uint buffOutOffset, uint dstride)
     {
         // skip the first byte
-        BitStream bitbuf = new BitStream(buffIn, (int)buffInOffset);
+        BitStream bitbuf = new BitStream(buffIn, (int)buffInOffset, (int)buffInLength);
         bitbuf.read(8);
 
         HuffmanDecoderRLE m_ycontext = new HuffmanDecoderRLE(256 + 16, 16, bitbuf);

@@ -12,5 +12,9 @@ namespace CHDSharpLib
 
         internal AudioPCMConfig AVHUFF_settings = null;
         internal AudioDecoder AVHUFF_audioDecoder = null;
+
+
+        internal byte[] bSector = null;
+        internal byte[] bSubcode = null;
     }
 }

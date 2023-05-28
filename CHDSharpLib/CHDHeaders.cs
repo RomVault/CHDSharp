@@ -178,7 +178,7 @@ internal static class CHDHeaders
         chd_error err = chdCompressed ?
                 compressed_v5_map(br, mapoffset, chd.totalblocks, chd.blocksize, unitbytes, out chd.map) :
                 uncompressed_v5_map(br, mapoffset, chd.totalblocks, out chd.map);
-       
+
         return err;
     }
 
@@ -215,7 +215,7 @@ internal static class CHDHeaders
         byte[] compressed_arr = new byte[mapbytes];
         br.BaseStream.Read(compressed_arr, 0, (int)mapbytes);
 
-        BitStream bitbuf = new BitStream(compressed_arr);
+        BitStream bitbuf = new BitStream(compressed_arr, 0, (int)mapbytes);
 
         /* first decode the compression types */
         HuffmanDecoder decoder = new HuffmanDecoder(16, 8, bitbuf);

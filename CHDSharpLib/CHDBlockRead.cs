@@ -87,7 +87,7 @@ namespace CHDSharpLib
             }
         }
 
-        internal static chd_error ReadBlock(mapentry mapentry,ArrayPool arrPool, CHDReader[] compression, CHDCodec codec, byte[] buffOut, int buffOutLength)
+        internal static chd_error ReadBlock(mapentry mapentry, ArrayPool arrPool, CHDReader[] compression, CHDCodec codec, byte[] buffOut, int buffOutLength)
         {
             bool checkCrc = true;
 
@@ -111,22 +111,22 @@ namespace CHDSharpLib
                                 // if this block is re-used keep a copy of it.
                                 if (mapentry.UseCount > 0)
                                 {
-                                    mapentry.buffOutCache =arrPool.Rent();
+                                    mapentry.buffOutCache = arrPool.Rent();
                                     Array.Copy(buffOut, 0, mapentry.buffOutCache, 0, buffOutLength);
                                 }
 
                                 break;
                             }
-                        }
 
-                        Array.Copy(mapentry.buffOutCache, 0, buffOut, 0, (int)buffOutLength);
-                        Interlocked.Decrement(ref mapentry.UseCount);
-                        if (mapentry.UseCount == 0)
-                        {
-                            arrPool.Return(mapentry.buffOutCache);
-                            mapentry.buffOutCache = null;
+                            Array.Copy(mapentry.buffOutCache, 0, buffOut, 0, (int)buffOutLength);
+                            Interlocked.Decrement(ref mapentry.UseCount);
+                            if (mapentry.UseCount == 0)
+                            {
+                                arrPool.Return(mapentry.buffOutCache);
+                                mapentry.buffOutCache = null;
+                            }
+                            checkCrc = false;
                         }
-                        checkCrc = false;
                         break;
                     }
                 case compression_type.COMPRESSION_NONE:
@@ -144,18 +144,18 @@ namespace CHDSharpLib
                                 }
                                 break;
                             }
+
+
+                            Array.Copy(mapentry.buffOutCache, 0, buffOut, 0, (int)buffOutLength);
+                            Interlocked.Decrement(ref mapentry.UseCount);
+                            if (mapentry.UseCount == 0)
+                            {
+                                arrPool.Return(mapentry.buffOutCache);
+                                mapentry.buffOutCache = null;
+                            }
+
+                            checkCrc = false;
                         }
-
-
-                        Array.Copy(mapentry.buffOutCache, 0, buffOut, 0, (int)buffOutLength);
-                        Interlocked.Decrement(ref mapentry.UseCount);
-                        if (mapentry.UseCount == 0)
-                        {
-                            arrPool.Return(mapentry.buffOutCache);
-                            mapentry.buffOutCache = null;
-                        }
-
-                        checkCrc = false;
                         break;
                     }
 
@@ -177,8 +177,7 @@ namespace CHDSharpLib
 
                 case compression_type.COMPRESSION_SELF:
                     {
-                        // should never hit here:
-                        chd_error retcs = ReadBlock(mapentry.selfMapEntry,arrPool, compression, codec, buffOut, buffOutLength);
+                        chd_error retcs = ReadBlock(mapentry.selfMapEntry, arrPool, compression, codec, buffOut, buffOutLength);
                         if (retcs != chd_error.CHDERR_NONE)
                             return retcs;
                         // check CRC in the read_block_into_cache call

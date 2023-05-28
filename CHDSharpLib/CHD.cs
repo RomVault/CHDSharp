@@ -186,7 +186,7 @@ public static class CHD
             mapentry mapEntry = chd.map[block];
             if (mapEntry.length > 0)
             {
-                mapEntry.buffIn = arrPool.Rent(); 
+                mapEntry.buffIn = arrPool.Rent();
                 file.Seek((long)mapEntry.offset, SeekOrigin.Begin);
                 file.Read(mapEntry.buffIn, 0, (int)mapEntry.length);
             }
@@ -392,7 +392,8 @@ public static class CHD
 
 
         Console.WriteLine($"Verifying, 100% complete.");
-
+        arrPool.ReadStats(out int issuedArraysTotal, out int returnedArraysTotal);
+        Console.WriteLine($"Issued Arrays Total {issuedArraysTotal},  returned Arrays Total {returnedArraysTotal}, block size {chd.blocksize}");
         if (errMaster != chd_error.CHDERR_NONE)
             return errMaster;
 

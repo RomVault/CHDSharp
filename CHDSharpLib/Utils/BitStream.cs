@@ -19,13 +19,13 @@ internal class BitStream
     *  create_bitstream - constructor
     *-------------------------------------------------
     */
-    public BitStream(byte[] src, int offset = 0)
+    public BitStream(byte[] src, int offset, int length)
     {
         buffer = 0;
         bits = 0;
         readBuffer = src;
         doffset = initialOffset = offset;
-        dlength = src.Length;
+        dlength = offset + length;
     }
 
     /*-----------------------------------------------------

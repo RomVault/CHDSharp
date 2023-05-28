@@ -19,7 +19,7 @@ internal static partial class CHDReaders
     }
     private static chd_error zlib(byte[] buffIn, int buffInStart, int buffInLength, byte[] buffOut, int buffOutLength)
     {
-        using var memStream = new MemoryStream(buffIn, buffInStart, buffInLength);
+        using var memStream = new MemoryStream(buffIn, buffInStart, buffInLength, false);
         using var compStream = new DeflateStream(memStream, CompressionMode.Decompress, true);
         int bytesRead = 0;
         while (bytesRead < buffOutLength)
@@ -54,7 +54,7 @@ internal static partial class CHDReaders
             properties[1 + j] = (Byte)((dictionarySize >> (8 * j)) & 0xFF);
 
 
-        using var memStream = new MemoryStream(buffIn, buffInStart, compsize);
+        using var memStream = new MemoryStream(buffIn, buffInStart, compsize, false);
         using Stream compStream = new LzmaStream(properties, memStream);
         int bytesRead = 0;
         while (bytesRead < buffOutLength)
@@ -74,7 +74,7 @@ internal static partial class CHDReaders
 
     internal static chd_error huffman(byte[] buffIn, int buffInLength, byte[] buffOut, int buffOutLength, CHDCodec codec)
     {
-        BitStream bitbuf = new BitStream(buffIn);
+        BitStream bitbuf = new BitStream(buffIn, 0, buffInLength);
         HuffmanDecoder hd = new HuffmanDecoder(256, 16, bitbuf);
 
         if (hd.ImportTreeHuffman() != huffman_error.HUFFERR_NONE)
@@ -144,7 +144,7 @@ internal static partial class CHDReaders
 
     private static readonly byte[] s_cd_sync_header = new byte[] { 0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x00 };
 
-    internal static chd_error cdzlib(byte[] buffIn,int buffInLength, byte[] buffOut, int buffOutLength, CHDCodec codec)
+    internal static chd_error cdzlib(byte[] buffIn, int buffInLength, byte[] buffOut, int buffOutLength, CHDCodec codec)
     {
         /* determine header bytes */
         int frames = buffOutLength / CD_FRAME_SIZE;
@@ -157,22 +157,22 @@ internal static partial class CHDReaders
         if (complen_bytes > 2)
             complen_base = (complen_base << 8) | buffIn[ecc_bytes + 2];
 
-        byte[] bSector = new byte[frames * CD_MAX_SECTOR_DATA];
-        byte[] bSubcode = new byte[frames * CD_MAX_SUBCODE_DATA];
+        codec.bSector ??= new byte[frames * CD_MAX_SECTOR_DATA];
+        codec.bSubcode ??= new byte[frames * CD_MAX_SUBCODE_DATA];
 
-        chd_error err = zlib(buffIn, (int)header_bytes, complen_base, bSector, frames * CD_MAX_SECTOR_DATA);
+        chd_error err = zlib(buffIn, (int)header_bytes, complen_base, codec.bSector, frames * CD_MAX_SECTOR_DATA);
         if (err != chd_error.CHDERR_NONE)
             return err;
 
-        err = zlib(buffIn, header_bytes + complen_base, buffInLength - header_bytes - complen_base, bSubcode, frames * CD_MAX_SUBCODE_DATA);
+        err = zlib(buffIn, header_bytes + complen_base, buffInLength - header_bytes - complen_base, codec.bSubcode, frames * CD_MAX_SUBCODE_DATA);
         if (err != chd_error.CHDERR_NONE)
             return err;
 
         /* reassemble the data */
         for (int framenum = 0; framenum < frames; framenum++)
         {
-            Array.Copy(bSector, framenum * CD_MAX_SECTOR_DATA, buffOut, framenum * CD_FRAME_SIZE, CD_MAX_SECTOR_DATA);
-            Array.Copy(bSubcode, framenum * CD_MAX_SUBCODE_DATA, buffOut, framenum * CD_FRAME_SIZE + CD_MAX_SECTOR_DATA, CD_MAX_SUBCODE_DATA);
+            Array.Copy(codec.bSector, framenum * CD_MAX_SECTOR_DATA, buffOut, framenum * CD_FRAME_SIZE, CD_MAX_SECTOR_DATA);
+            Array.Copy(codec.bSubcode, framenum * CD_MAX_SUBCODE_DATA, buffOut, framenum * CD_FRAME_SIZE + CD_MAX_SECTOR_DATA, CD_MAX_SUBCODE_DATA);
 
             // reconstitute the ECC data and sync header 
             int sectorStart = framenum * CD_FRAME_SIZE;
@@ -199,22 +199,22 @@ internal static partial class CHDReaders
         if (complen_bytes > 2)
             complen_base = (complen_base << 8) | buffIn[ecc_bytes + 2];
 
-        byte[] bSector = new byte[frames * CD_MAX_SECTOR_DATA];
-        byte[] bSubcode = new byte[frames * CD_MAX_SUBCODE_DATA];
+        codec.bSector ??= new byte[frames * CD_MAX_SECTOR_DATA];
+        codec.bSubcode ??= new byte[frames * CD_MAX_SUBCODE_DATA];
 
-        chd_error err = lzma(buffIn, header_bytes, complen_base, bSector, frames * CD_MAX_SECTOR_DATA);
+        chd_error err = lzma(buffIn, header_bytes, complen_base, codec.bSector, frames * CD_MAX_SECTOR_DATA);
         if (err != chd_error.CHDERR_NONE)
             return err;
 
-        err = zlib(buffIn, header_bytes + complen_base, buffInLength - header_bytes - complen_base, bSubcode, frames * CD_MAX_SUBCODE_DATA);
+        err = zlib(buffIn, header_bytes + complen_base, buffInLength - header_bytes - complen_base, codec.bSubcode, frames * CD_MAX_SUBCODE_DATA);
         if (err != chd_error.CHDERR_NONE)
             return err;
 
         /* reassemble the data */
         for (int framenum = 0; framenum < frames; framenum++)
         {
-            Array.Copy(bSector, framenum * CD_MAX_SECTOR_DATA, buffOut, framenum * CD_FRAME_SIZE, CD_MAX_SECTOR_DATA);
-            Array.Copy(bSubcode, framenum * CD_MAX_SUBCODE_DATA, buffOut, framenum * CD_FRAME_SIZE + CD_MAX_SECTOR_DATA, CD_MAX_SUBCODE_DATA);
+            Array.Copy(codec.bSector, framenum * CD_MAX_SECTOR_DATA, buffOut, framenum * CD_FRAME_SIZE, CD_MAX_SECTOR_DATA);
+            Array.Copy(codec.bSubcode, framenum * CD_MAX_SUBCODE_DATA, buffOut, framenum * CD_FRAME_SIZE + CD_MAX_SECTOR_DATA, CD_MAX_SUBCODE_DATA);
 
             // reconstitute the ECC data and sync header 
             int sectorStart = framenum * CD_FRAME_SIZE;
@@ -232,22 +232,22 @@ internal static partial class CHDReaders
     {
         int frames = buffOutLength / CD_FRAME_SIZE;
 
-        byte[] bSector = new byte[frames * CD_MAX_SECTOR_DATA];
-        byte[] bSubcode = new byte[frames * CD_MAX_SUBCODE_DATA];
+        codec.bSector ??= new byte[frames * CD_MAX_SECTOR_DATA];
+        codec.bSubcode ??= new byte[frames * CD_MAX_SUBCODE_DATA];
 
-        chd_error err = flac(buffIn, 0, buffInLength, bSector, frames * CD_MAX_SECTOR_DATA, true, codec, out int pos);
+        chd_error err = flac(buffIn, 0, buffInLength, codec.bSector, frames * CD_MAX_SECTOR_DATA, true, codec, out int pos);
         if (err != chd_error.CHDERR_NONE)
             return err;
 
-        err = zlib(buffIn, pos, buffInLength - pos, bSubcode, frames * CD_MAX_SUBCODE_DATA);
+        err = zlib(buffIn, pos, buffInLength - pos, codec.bSubcode, frames * CD_MAX_SUBCODE_DATA);
         if (err != chd_error.CHDERR_NONE)
             return err;
 
         /* reassemble the data */
         for (int framenum = 0; framenum < frames; framenum++)
         {
-            Array.Copy(bSector, framenum * CD_MAX_SECTOR_DATA, buffOut, framenum * CD_FRAME_SIZE, CD_MAX_SECTOR_DATA);
-            Array.Copy(bSubcode, framenum * CD_MAX_SUBCODE_DATA, buffOut, framenum * CD_FRAME_SIZE + CD_MAX_SECTOR_DATA, CD_MAX_SUBCODE_DATA);
+            Array.Copy(codec.bSector, framenum * CD_MAX_SECTOR_DATA, buffOut, framenum * CD_FRAME_SIZE, CD_MAX_SECTOR_DATA);
+            Array.Copy(codec.bSubcode, framenum * CD_MAX_SUBCODE_DATA, buffOut, framenum * CD_FRAME_SIZE + CD_MAX_SECTOR_DATA, CD_MAX_SUBCODE_DATA);
         }
         return chd_error.CHDERR_NONE;
     }
