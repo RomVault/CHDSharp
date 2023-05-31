@@ -17,6 +17,7 @@ namespace CHDSharpLib
             int totalFound = 0;
             int[] compressionCount = new int[5];
             int[] compressionSelfCount = new int[5];
+            int[] compressionUniqueCount = new int[5];
 
             Parallel.ForEach(chd.map, me =>
             {
@@ -39,8 +40,16 @@ namespace CHDSharpLib
                         Console.WriteLine($"Error {me.selfMapEntry.comptype}");
                         break;
                 }
-                Interlocked.Increment(ref compressionSelfCount[(int)chd.map[me.offset].comptype]);
-                Interlocked.Increment(ref me.selfMapEntry.UseCount);
+
+                // this is the counter that is actually used to counding repeat blocks
+                lock (me.selfMapEntry)
+                {
+                    Interlocked.Increment(ref me.selfMapEntry.UseCount);
+                    if (me.selfMapEntry.UseCount == 1)
+                        Interlocked.Increment(ref compressionUniqueCount[(int)me.selfMapEntry.comptype]);
+                }
+                // there are just here for reporting statistics to the UI
+                Interlocked.Increment(ref compressionSelfCount[(int)me.selfMapEntry.comptype]);
                 Interlocked.Increment(ref totalFound);
             });
 
@@ -59,7 +68,7 @@ namespace CHDSharpLib
                     comp = "NONE";
                 }
 
-                Console.WriteLine($"Compression {i} : {comp} : Block Count {compressionCount[i]}  , Repeat Block Count {compressionSelfCount[i]}");
+                Console.WriteLine($"Compression {i} : {comp} : Block Count {compressionCount[i]}  ,Repeat Source Block Count {compressionUniqueCount[i]}, Repeat Total Block Count {compressionSelfCount[i]}");
             }
 
         }
@@ -114,11 +123,11 @@ namespace CHDSharpLib
                                     mapentry.buffOutCache = arrPool.Rent();
                                     Array.Copy(buffOut, 0, mapentry.buffOutCache, 0, buffOutLength);
                                 }
-
                                 break;
                             }
 
                             Array.Copy(mapentry.buffOutCache, 0, buffOut, 0, (int)buffOutLength);
+
                             Interlocked.Decrement(ref mapentry.UseCount);
                             if (mapentry.UseCount == 0)
                             {
@@ -153,7 +162,7 @@ namespace CHDSharpLib
                                 arrPool.Return(mapentry.buffOutCache);
                                 mapentry.buffOutCache = null;
                             }
-
+                            
                             checkCrc = false;
                         }
                         break;

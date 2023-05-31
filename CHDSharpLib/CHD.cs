@@ -60,7 +60,7 @@ public static class CHD
     {
         Console.WriteLine("");
         Console.WriteLine($"Testing :{filename}");
-        using (Stream s = File.Open(filename, FileMode.Open, FileAccess.Read))
+        using (Stream s = new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.Read, 4*1024*1024))
         {
             if (!CheckHeader(s, out uint length, out uint version))
                 return;
@@ -248,7 +248,10 @@ public static class CHD
         var ts = new CancellationTokenSource();
         CancellationToken ct = ts.Token;
 
-        ArrayPool arrPool = new ArrayPool(chd.blocksize);
+        ArrayPool arrPoolIn = new ArrayPool(chd.blocksize);
+        ArrayPool arrPoolOut = new ArrayPool(chd.blocksize);
+        ArrayPool arrPoolCache = new ArrayPool(chd.blocksize);
+        Semaphore aheadLock = new Semaphore(taskCount * 100, taskCount * 100);
 
         Task producerThread = Task.Factory.StartNew(() =>
         {
@@ -272,7 +275,7 @@ public static class CHD
                     if (mapentry.length > 0)
                     {
                         file.Seek((long)mapentry.offset, SeekOrigin.Begin);
-                        mapentry.buffIn = arrPool.Rent();
+                        mapentry.buffIn = arrPoolIn.Rent();
                         file.Read(mapentry.buffIn, 0, (int)mapentry.length);
                     }
 
@@ -307,13 +310,13 @@ public static class CHD
                     CHDCodec codec = new CHDCodec();
                     while (true)
                     {
+                        aheadLock.WaitOne();
                         int block = blocksToDecompress.Take(ct);
                         if (block == -1)
                             return;
-
                         mapentry mapentry = chd.map[block];
-                        mapentry.buffOut = arrPool.Rent();
-                        chd_error err = CHDBlockRead.ReadBlock(mapentry, arrPool, chd.chdReader, codec, mapentry.buffOut, (int)chd.blocksize);
+                        mapentry.buffOut = arrPoolOut.Rent();
+                        chd_error err = CHDBlockRead.ReadBlock(mapentry, arrPoolCache, chd.chdReader, codec, mapentry.buffOut, (int)chd.blocksize);
                         if (err != chd_error.CHDERR_NONE)
                         {
                             ts.Cancel();
@@ -324,7 +327,7 @@ public static class CHD
 
                         if (mapentry.length > 0)
                         {
-                            arrPool.Return(mapentry.buffIn);
+                            arrPoolIn.Return(mapentry.buffIn);
                             mapentry.buffIn = null;
                         }
                     }
@@ -363,8 +366,9 @@ public static class CHD
                         md5Check?.TransformBlock(mapentry.buffOut, 0, sizenext, null, 0);
                         sha1Check?.TransformBlock(mapentry.buffOut, 0, sizenext, null, 0);
 
-                        arrPool.Return(mapentry.buffOut);
+                        arrPoolOut.Return(mapentry.buffOut);
                         mapentry.buffOut = null;
+                        aheadLock.Release();
 
                         /* prepare for the next block */
                         sizetoGo -= (ulong)sizenext;
@@ -392,8 +396,12 @@ public static class CHD
 
 
         Console.WriteLine($"Verifying, 100% complete.");
-        arrPool.ReadStats(out int issuedArraysTotal, out int returnedArraysTotal);
-        Console.WriteLine($"Issued Arrays Total {issuedArraysTotal},  returned Arrays Total {returnedArraysTotal}, block size {chd.blocksize}");
+        arrPoolIn.ReadStats(out int issuedArraysTotal, out int returnedArraysTotal);
+        Console.WriteLine($"In: Issued Arrays Total {issuedArraysTotal},  returned Arrays Total {returnedArraysTotal}, block size {chd.blocksize}");
+        arrPoolOut.ReadStats(out issuedArraysTotal, out returnedArraysTotal);
+        Console.WriteLine($"Out: Issued Arrays Total {issuedArraysTotal},  returned Arrays Total {returnedArraysTotal}, block size {chd.blocksize}");
+        arrPoolCache.ReadStats(out issuedArraysTotal, out returnedArraysTotal);
+        Console.WriteLine($"Cache: Issued Arrays Total {issuedArraysTotal},  returned Arrays Total {returnedArraysTotal}, block size {chd.blocksize}");
         if (errMaster != chd_error.CHDERR_NONE)
             return errMaster;
 
