@@ -1,5 +1,7 @@
 ﻿using CHDSharpLib.Utils;
 using System;
+using System.Collections.Generic;
+using System.ComponentModel.Design;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -70,7 +72,77 @@ namespace CHDSharpLib
 
                 Console.WriteLine($"Compression {i} : {comp} : Block Count {compressionCount[i]}  ,Repeat Source Block Count {compressionUniqueCount[i]}, Repeat Total Block Count {compressionSelfCount[i]}");
             }
+        }
 
+        internal static void KeepMostRepeatedBlocks(CHDHeader chd)
+        {
+            List<mapentry> mapentries = new List<mapentry>();
+            foreach (mapentry me in chd.map)
+            {
+                if (me.UseCount > 0)
+                {
+                    me.UsageWeight = GetWeigth(chd, me) * me.UseCount;
+                    mapentries.Add(me);
+                }
+            }
+            Console.WriteLine($"{mapentries.Count} repeated used blocks");
+            if (mapentries.Count < 1000)
+                return;
+
+            mapentries.Sort((a, b) => b.UsageWeight.CompareTo(a.UsageWeight));
+
+            int c = 0;
+            foreach (mapentry me in mapentries)
+            {
+                if (c < 1000)
+                {
+                    c++;
+                    me.KeepBufferCopy = true;
+                    continue;
+                }
+
+                me.KeepBufferCopy = false;
+                me.UseCount = 0;
+            }
+
+            Parallel.ForEach(chd.map, me =>
+            {
+                if (me.comptype != compression_type.COMPRESSION_SELF)
+                    return;
+                // this should never be true
+                if (me.selfMapEntry == null)
+                    return;
+
+                if (me.selfMapEntry.KeepBufferCopy)
+                    return;
+
+                me.comptype = me.selfMapEntry.comptype;
+                me.length = me.selfMapEntry.length;
+                me.offset = me.selfMapEntry.offset;
+                me.crc = me.selfMapEntry.crc;
+                me.crc16 = me.selfMapEntry.crc16;
+                me.selfMapEntry = null;
+            });
+        }
+        internal static int GetWeigth(CHDHeader chd, mapentry me)
+        {
+            if (me.comptype == compression_type.COMPRESSION_NONE)
+                return 1;
+
+            switch (chd.compression[(int)me.comptype])
+            {
+                case chd_codec.CHD_CODEC_LZMA: return 23;
+                case chd_codec.CHD_CODEC_ZLIB: return 1;
+                case chd_codec.CHD_CODEC_FLAC: return (me.length == 41) ? 1 : 2;
+                case chd_codec.CHD_CODEC_HUFFMAN: return 64;
+
+                case chd_codec.CHD_CODEC_AVHUFF: return 1;
+
+                case chd_codec.CHD_CODEC_CD_FLAC: return (me.length == 15) ? 1 : 2;
+                case chd_codec.CHD_CODEC_CD_LZMA: return 18;
+                case chd_codec.CHD_CODEC_CD_ZLIB: return 3;
+                default: return 1;
+            }
         }
 
         internal static void FindBlockReaders(CHDHeader chd)
@@ -162,7 +234,7 @@ namespace CHDSharpLib
                                 arrPool.Return(mapentry.buffOutCache);
                                 mapentry.buffOutCache = null;
                             }
-                            
+
                             checkCrc = false;
                         }
                         break;

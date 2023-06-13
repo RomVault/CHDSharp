@@ -51,6 +51,10 @@ internal class mapentry
     // Used in Parallel decompress to keep the blocks in order when hashing.
     public bool Processed = false;
 
+
+    // Used to calculate which blocks should have buffered copies kept.
+    public int UsageWeight;
+    public bool KeepBufferCopy = false;
 }
 
 
@@ -60,7 +64,7 @@ public static class CHD
     {
         Console.WriteLine("");
         Console.WriteLine($"Testing :{filename}");
-        using (Stream s = new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.Read, 4*1024*1024))
+        using (Stream s = new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.Read, 4 * 1024 * 1024))
         {
             if (!CheckHeader(s, out uint length, out uint version))
                 return;
@@ -108,7 +112,9 @@ public static class CHD
 
             CHDBlockRead.FindRepeatedBlocks(chd);
             CHDBlockRead.FindBlockReaders(chd);
+            CHDBlockRead.KeepMostRepeatedBlocks(chd);
 
+            
             valid = DecompressDataParallel(s, chd);
             if (valid != chd_error.CHDERR_NONE)
             {
@@ -123,7 +129,7 @@ public static class CHD
                 SendMessage($"Meta Data Failed: {valid}", ConsoleColor.Red);
                 return;
             }
-
+            
             SendMessage($"Valid", ConsoleColor.Green);
         }
     }
@@ -196,8 +202,11 @@ public static class CHD
             if (err != chd_error.CHDERR_NONE)
                 return err;
 
-            arrPool.Return(mapEntry.buffIn);
-            mapEntry.buffIn = null;
+            if (mapEntry.length > 0)
+            {
+                arrPool.Return(mapEntry.buffIn);
+                mapEntry.buffIn = null;
+            }
 
             int sizenext = sizetoGo > (ulong)chd.blocksize ? (int)chd.blocksize : (int)sizetoGo;
 
@@ -229,7 +238,7 @@ public static class CHD
     }
 
 
-    public static int taskCounter = 4;
+    public static int taskCounter = 8;
 
     internal static chd_error DecompressDataParallel(Stream file, CHDHeader chd)
     {
