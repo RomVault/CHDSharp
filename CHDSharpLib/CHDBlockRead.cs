@@ -74,7 +74,7 @@ namespace CHDSharpLib
             }
         }
 
-        internal static void KeepMostRepeatedBlocks(CHDHeader chd)
+        internal static void KeepMostRepeatedBlocks(CHDHeader chd,int blocksToKeep)
         {
             List<mapentry> mapentries = new List<mapentry>();
             foreach (mapentry me in chd.map)
@@ -86,7 +86,7 @@ namespace CHDSharpLib
                 }
             }
             Console.WriteLine($"{mapentries.Count} repeated used blocks");
-            if (mapentries.Count < 1000)
+            if (mapentries.Count < blocksToKeep)
                 return;
 
             mapentries.Sort((a, b) => b.UsageWeight.CompareTo(a.UsageWeight));
@@ -94,7 +94,7 @@ namespace CHDSharpLib
             int c = 0;
             foreach (mapentry me in mapentries)
             {
-                if (c < 1000)
+                if (c < blocksToKeep)
                 {
                     c++;
                     me.KeepBufferCopy = true;

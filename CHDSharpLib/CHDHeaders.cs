@@ -177,13 +177,13 @@ internal static class CHDHeaders
 
         chd_error err = chdCompressed ?
                 compressed_v5_map(br, mapoffset, chd.totalblocks, chd.blocksize, unitbytes, out chd.map) :
-                uncompressed_v5_map(br, mapoffset, chd.totalblocks, out chd.map);
+                uncompressed_v5_map(br, mapoffset, chd.totalblocks, chd.blocksize, out chd.map);
 
         return err;
     }
 
 
-    private static chd_error uncompressed_v5_map(BinaryReader br, ulong mapoffset, uint totalblocks, out mapentry[] map)
+    private static chd_error uncompressed_v5_map(BinaryReader br, ulong mapoffset, uint totalblocks,uint blocksize, out mapentry[] map)
     {
         br.BaseStream.Seek((long)mapoffset, SeekOrigin.Begin);
 
@@ -192,7 +192,8 @@ internal static class CHDHeaders
         {
             map[blockIndex] = new mapentry();
             map[blockIndex].comptype = compression_type.COMPRESSION_NONE;
-            map[blockIndex].offset = br.ReadUInt32BE();
+            map[blockIndex].length = blocksize;
+            map[blockIndex].offset = br.ReadUInt32BE()*blocksize;
         }
         return chd_error.CHDERR_NONE;
 

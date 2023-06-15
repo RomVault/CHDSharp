@@ -70,7 +70,7 @@ internal static class CHDMetaData
         sha1Total.TransformFinalBlock(tmp, 0, 0);
 
         // compare the calculated metaData + rawData SHA1 with sha1 from the CHD header
-        if (!Util.ByteArrEquals(chd.sha1, sha1Total.Hash))
+        if (!Util.IsAllZeroArray(chd.sha1) && !Util.ByteArrEquals(chd.sha1, sha1Total.Hash))
             return chd_error.CHDERR_INVALID_METADATA;
 
         return chd_error.CHDERR_NONE;

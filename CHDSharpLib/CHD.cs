@@ -112,9 +112,9 @@ public static class CHD
 
             CHDBlockRead.FindRepeatedBlocks(chd);
             CHDBlockRead.FindBlockReaders(chd);
-            CHDBlockRead.KeepMostRepeatedBlocks(chd);
+            CHDBlockRead.KeepMostRepeatedBlocks(chd, 1000);
 
-            
+
             valid = DecompressDataParallel(s, chd);
             if (valid != chd_error.CHDERR_NONE)
             {
@@ -129,7 +129,7 @@ public static class CHD
                 SendMessage($"Meta Data Failed: {valid}", ConsoleColor.Red);
                 return;
             }
-            
+
             SendMessage($"Valid", ConsoleColor.Green);
         }
     }
@@ -225,11 +225,11 @@ public static class CHD
         sha1Check?.TransformFinalBlock(tmp, 0, 0);
 
         // here it is now using the rawsha1 value from the header to validate the raw binary data.
-        if (chd.md5 != null && !Util.ByteArrEquals(chd.md5, md5Check.Hash))
+        if (chd.md5 != null && !Util.IsAllZeroArray(chd.md5) && !Util.ByteArrEquals(chd.md5, md5Check.Hash))
         {
             return chd_error.CHDERR_DECOMPRESSION_ERROR;
         }
-        if (chd.rawsha1 != null && !Util.ByteArrEquals(chd.rawsha1, sha1Check.Hash))
+        if (chd.rawsha1 != null && !Util.IsAllZeroArray(chd.rawsha1) && !Util.ByteArrEquals(chd.rawsha1, sha1Check.Hash))
         {
             return chd_error.CHDERR_DECOMPRESSION_ERROR;
         }
@@ -419,11 +419,11 @@ public static class CHD
         sha1Check?.TransformFinalBlock(tmp, 0, 0);
 
         // here it is now using the rawsha1 value from the header to validate the raw binary data.
-        if (chd.md5 != null && !Util.ByteArrEquals(chd.md5, md5Check.Hash))
+        if (chd.md5 != null && !Util.IsAllZeroArray(chd.md5) && !Util.ByteArrEquals(chd.md5, md5Check.Hash))
         {
             return chd_error.CHDERR_DECOMPRESSION_ERROR;
         }
-        if (chd.rawsha1 != null && !Util.ByteArrEquals(chd.rawsha1, sha1Check.Hash))
+        if (chd.rawsha1 != null && !Util.IsAllZeroArray(chd.rawsha1) && !Util.ByteArrEquals(chd.rawsha1, sha1Check.Hash))
         {
             return chd_error.CHDERR_DECOMPRESSION_ERROR;
         }
