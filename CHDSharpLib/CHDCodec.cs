@@ -16,5 +16,7 @@ namespace CHDSharpLib
 
         internal byte[] bSector = null;
         internal byte[] bSubcode = null;
+
+        internal byte[] blzma = null;
     }
 }

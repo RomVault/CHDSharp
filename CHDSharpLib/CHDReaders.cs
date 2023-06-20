@@ -39,9 +39,9 @@ internal static partial class CHDReaders
 
     internal static chd_error lzma(byte[] buffIn, int buffInLength, byte[] buffOut, int buffOutLength, CHDCodec codec)
     {
-        return lzma(buffIn, 0, buffInLength, buffOut, buffOutLength);
+        return lzma(buffIn, 0, buffInLength, buffOut, buffOutLength, codec);
     }
-    private static chd_error lzma(byte[] buffIn, int buffInStart, int compsize, byte[] buffOut, int buffOutLength)
+    private static chd_error lzma(byte[] buffIn, int buffInStart, int compsize, byte[] buffOut, int buffOutLength, CHDCodec codec)
     {
         //hacky header creator
         byte[] properties = new byte[5];
@@ -53,9 +53,11 @@ internal static partial class CHDReaders
         for (int j = 0; j < 4; j++)
             properties[1 + j] = (Byte)((dictionarySize >> (8 * j)) & 0xFF);
 
+        if (codec.blzma == null)
+            codec.blzma = new byte[dictionarySize];
 
         using var memStream = new MemoryStream(buffIn, buffInStart, compsize, false);
-        using Stream compStream = new LzmaStream(properties, memStream);
+        using Stream compStream = new LzmaStream(properties, memStream, -1, -1, null, false,codec.blzma);
         int bytesRead = 0;
         while (bytesRead < buffOutLength)
         {
@@ -202,7 +204,7 @@ internal static partial class CHDReaders
         codec.bSector ??= new byte[frames * CD_MAX_SECTOR_DATA];
         codec.bSubcode ??= new byte[frames * CD_MAX_SUBCODE_DATA];
 
-        chd_error err = lzma(buffIn, header_bytes, complen_base, codec.bSector, frames * CD_MAX_SECTOR_DATA);
+        chd_error err = lzma(buffIn, header_bytes, complen_base, codec.bSector, frames * CD_MAX_SECTOR_DATA, codec);
         if (err != chd_error.CHDERR_NONE)
             return err;
 
