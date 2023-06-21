@@ -125,7 +125,7 @@ internal static partial class CHDReaders
         {
             uint videostride = 2 * videoWidth;
             // decode the video
-            chd_error err = decodeVideo(videoWidth, videoHeight, buffIn, buffInIndex, (uint)buffInLength - buffInIndex, buffOut, videoDestStart, videostride);
+            chd_error err = DecodeVideo(videoWidth, videoHeight, buffIn, buffInIndex, (uint)buffInLength - buffInIndex, buffOut, videoDestStart, videostride, codec);
             if (err != chd_error.CHDERR_NONE)
                 return err;
         }
@@ -197,8 +197,12 @@ internal static partial class CHDReaders
         if (treesize != 0)
         {
             BitStream bitbuf = new BitStream(buffIn, (int)buffInOffset, (int)treesize);
-            m_audiohi_decoder = new HuffmanDecoder(256, 16, bitbuf);
-            m_audiolo_decoder = new HuffmanDecoder(256, 16, bitbuf);
+
+            if (codec.bHuffmanHi == null) codec.bHuffmanHi = new ushort[1 << 16];
+            if (codec.bHuffmanLo == null) codec.bHuffmanLo = new ushort[1 << 16];
+
+            m_audiohi_decoder = new HuffmanDecoder(256, 16, bitbuf, codec.bHuffmanHi);
+            m_audiolo_decoder = new HuffmanDecoder(256, 16, bitbuf, codec.bHuffmanLo);
 
             huffman_error hufferr = m_audiohi_decoder.ImportTreeRLE();
             if (hufferr != huffman_error.HUFFERR_NONE)
@@ -270,26 +274,23 @@ internal static partial class CHDReaders
 
 
 
-    private static chd_error decodeVideo(uint width, uint height, byte[] buffIn, uint buffInOffset, uint buffInLength, byte[] buffOut, uint buffOutOffset, uint dstride)
+    private static chd_error DecodeVideo(uint width, uint height, byte[] buffIn, uint buffInOffset, uint buffInLength, byte[] buffOut, uint buffOutOffset, uint dstride, CHDCodec codec)
     {
         // if the high bit of the first byte is set, we decode losslessly
-        if ((buffIn[buffInOffset] & 0x80) != 0)
-            return DecodeVideoLossless(width, height, buffIn, buffInOffset, buffInLength, buffOut, buffOutOffset, dstride);
-        else
+        if ((buffIn[buffInOffset] & 0x80) == 0)
             return chd_error.CHDERR_INVALID_DATA;
-    }
 
-
-
-    private static chd_error DecodeVideoLossless(uint width, uint height, byte[] buffIn, uint buffInOffset, uint buffInLength, byte[] buffOut, uint buffOutOffset, uint dstride)
-    {
         // skip the first byte
         BitStream bitbuf = new BitStream(buffIn, (int)buffInOffset, (int)buffInLength);
         bitbuf.read(8);
 
-        HuffmanDecoderRLE m_ycontext = new HuffmanDecoderRLE(256 + 16, 16, bitbuf);
-        HuffmanDecoderRLE m_cbcontext = new HuffmanDecoderRLE(256 + 16, 16, bitbuf);
-        HuffmanDecoderRLE m_crcontext = new HuffmanDecoderRLE(256 + 16, 16, bitbuf);
+        if (codec.bHuffmanY == null) codec.bHuffmanY = new ushort[1 << 16];
+        if (codec.bHuffmanCB == null) codec.bHuffmanCB = new ushort[1 << 16];
+        if (codec.bHuffmanCR == null) codec.bHuffmanCR = new ushort[1 << 16];
+
+        HuffmanDecoderRLE m_ycontext = new HuffmanDecoderRLE(256 + 16, 16, bitbuf, codec.bHuffmanY);
+        HuffmanDecoderRLE m_cbcontext = new HuffmanDecoderRLE(256 + 16, 16, bitbuf, codec.bHuffmanCB);
+        HuffmanDecoderRLE m_crcontext = new HuffmanDecoderRLE(256 + 16, 16, bitbuf, codec.bHuffmanCR);
 
         // import the tables
         huffman_error hufferr = m_ycontext.ImportTreeRLE();

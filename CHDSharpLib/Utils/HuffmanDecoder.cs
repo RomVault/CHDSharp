@@ -43,7 +43,7 @@ internal class HuffmanDecoder
     *  decoding context
     *-------------------------------------------------
     */
-    public HuffmanDecoder(uint numcodes, byte maxbits, BitStream bitbuf)
+    public HuffmanDecoder(uint numcodes, byte maxbits, BitStream bitbuf, ushort[] buffLookup = null)
     {
         /* limit to 24 bits */
         if (maxbits > 24)
@@ -51,7 +51,9 @@ internal class HuffmanDecoder
 
         this.numcodes = numcodes;
         this.maxbits = maxbits;
-        lookup = new ushort[(1 << maxbits)];
+
+        lookup = buffLookup == null ? (new ushort[(1 << maxbits)]) : buffLookup;
+
         huffnode = new node_t[numcodes];
         //decoder.datahisto = null;
         //decoder.prevdata = 0;
@@ -110,7 +112,7 @@ internal class HuffmanDecoder
         for (curnode = 0; curnode < numcodes;)
         {
             /* a non-one value is just raw */
-            int nodebits =(int) bitbuf.read(numbits);
+            int nodebits = (int)bitbuf.read(numbits);
             if (nodebits != 1)
                 huffnode[curnode++].numbits = (byte)nodebits;
 

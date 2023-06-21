@@ -5,7 +5,7 @@ internal class HuffmanDecoderRLE : HuffmanDecoder
     private int rlecount = 0;
     private uint prevdata = 0;
 
-    public HuffmanDecoderRLE(uint numcodes, byte maxbits, BitStream bitbuf) : base(numcodes, maxbits, bitbuf)
+    public HuffmanDecoderRLE(uint numcodes, byte maxbits, BitStream bitbuf, ushort[] buffLookup) : base(numcodes, maxbits, bitbuf, buffLookup)
     { }
 
     public void Reset()

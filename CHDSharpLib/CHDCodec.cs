@@ -18,5 +18,14 @@ namespace CHDSharpLib
         internal byte[] bSubcode = null;
 
         internal byte[] blzma = null;
+
+        internal ushort[] bHuffman = null;
+
+        internal ushort[] bHuffmanHi = null;
+        internal ushort[] bHuffmanLo = null;
+
+        internal ushort[] bHuffmanY = null;
+        internal ushort[] bHuffmanCB = null;
+        internal ushort[] bHuffmanCR = null;
     }
 }

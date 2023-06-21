@@ -76,8 +76,11 @@ internal static partial class CHDReaders
 
     internal static chd_error huffman(byte[] buffIn, int buffInLength, byte[] buffOut, int buffOutLength, CHDCodec codec)
     {
+        if (codec.bHuffman == null)
+            codec.bHuffman = new ushort[1 << 16];
+
         BitStream bitbuf = new BitStream(buffIn, 0, buffInLength);
-        HuffmanDecoder hd = new HuffmanDecoder(256, 16, bitbuf);
+        HuffmanDecoder hd = new HuffmanDecoder(256, 16, bitbuf, codec.bHuffman);
 
         if (hd.ImportTreeHuffman() != huffman_error.HUFFERR_NONE)
             return chd_error.CHDERR_INVALID_DATA;
