@@ -112,7 +112,7 @@ public enum compression_type
 
 
 
-enum chd_error
+public enum chd_error
 {
     CHDERR_NONE,
     CHDERR_NO_INTERFACE,
@@ -141,5 +141,6 @@ enum chd_error
     CHDERR_INVALID_STATE,
     CHDERR_OPERATION_PENDING,
     CHDERR_NO_ASYNC_OPERATION,
-    CHDERR_UNSUPPORTED_FORMAT
+    CHDERR_UNSUPPORTED_FORMAT,
+    CHDERR_CANNOT_OPEN_FILE
 };

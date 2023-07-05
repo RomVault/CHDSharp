@@ -1,4 +1,5 @@
 ﻿using CHDSharpLib.Utils;
+using System.Collections.Generic;
 using System.IO;
 using System.Text;
 
@@ -30,11 +31,24 @@ internal static class CHDHeaders
 
         chd.map = new mapentry[chd.totalblocks];
 
+        Dictionary<ulong, int> mapBack = new Dictionary<ulong, int>();
+
         for (int i = 0; i < chd.totalblocks; i++)
         {
             ulong tmpu = br.ReadUInt64BE();
-
             chd.map[i] = new mapentry();
+
+
+            if (mapBack.TryGetValue(tmpu, out int v))
+            {
+                chd.map[i].offset = (uint)v;
+                chd.map[i].length = 0;
+                chd.map[i].comptype = compression_type.COMPRESSION_SELF;
+                continue;
+            }
+
+            mapBack.Add(tmpu, i);
+
             chd.map[i].offset = tmpu & 0xfffffffffff;
             chd.map[i].length = (uint)(tmpu >> 44);
             chd.map[i].comptype = (chd.map[i].length == chd.blocksize)
@@ -68,17 +82,31 @@ internal static class CHDHeaders
 
         chd.map = new mapentry[chd.totalblocks];
 
+        Dictionary<ulong, int> mapBack = new Dictionary<ulong, int>();
+
         for (int i = 0; i < chd.totalblocks; i++)
         {
             ulong tmpu = br.ReadUInt64BE();
-
             chd.map[i] = new mapentry();
+
+
+            if (mapBack.TryGetValue(tmpu, out int v))
+            {
+                chd.map[i].offset = (uint)v;
+                chd.map[i].length = 0;
+                chd.map[i].comptype = compression_type.COMPRESSION_SELF;
+                continue;
+            }
+
+            mapBack.Add(tmpu, i);
+
             chd.map[i].offset = tmpu & 0xfffffffffff;
             chd.map[i].length = (uint)(tmpu >> 44);
             chd.map[i].comptype = (chd.map[i].length == chd.blocksize)
                            ? compression_type.COMPRESSION_NONE
                            : compression_type.COMPRESSION_TYPE_0;
         }
+
 
         return chd_error.CHDERR_NONE;
     }
@@ -183,7 +211,7 @@ internal static class CHDHeaders
     }
 
 
-    private static chd_error uncompressed_v5_map(BinaryReader br, ulong mapoffset, uint totalblocks,uint blocksize, out mapentry[] map)
+    private static chd_error uncompressed_v5_map(BinaryReader br, ulong mapoffset, uint totalblocks, uint blocksize, out mapentry[] map)
     {
         br.BaseStream.Seek((long)mapoffset, SeekOrigin.Begin);
 
@@ -193,10 +221,9 @@ internal static class CHDHeaders
             map[blockIndex] = new mapentry();
             map[blockIndex].comptype = compression_type.COMPRESSION_NONE;
             map[blockIndex].length = blocksize;
-            map[blockIndex].offset = br.ReadUInt32BE()*blocksize;
+            map[blockIndex].offset = br.ReadUInt32BE() * blocksize;
         }
         return chd_error.CHDERR_NONE;
-
     }
 
     private static chd_error compressed_v5_map(BinaryReader br, ulong mapoffset, uint totalBlocks, uint blocksize, uint unitbytes, out mapentry[] map)

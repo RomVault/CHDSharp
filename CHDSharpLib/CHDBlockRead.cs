@@ -14,7 +14,7 @@ namespace CHDSharpLib
         // this copy is then used (instead of re-decompressing.) until the use count returns to zero
         // at which time the backup copy if removed.
 
-        internal static void FindRepeatedBlocks(CHDHeader chd)
+        internal static void FindRepeatedBlocks(CHDHeader chd, Message consoleOut)
         {
             int totalFound = 0;
             int[] compressionCount = new int[5];
@@ -39,42 +39,53 @@ namespace CHDSharpLib
                     case compression_type.COMPRESSION_NONE:
                         break;
                     default:
-                        Console.WriteLine($"Error {me.selfMapEntry.comptype}");
+                        consoleOut?.Invoke($"Error {me.selfMapEntry.comptype}");
                         break;
                 }
 
-                // this is the counter that is actually used to counding repeat blocks
-                lock (me.selfMapEntry)
+                if (consoleOut == null)
                 {
+                    // this is the value that is actually needed, the rest are just for display info.
                     Interlocked.Increment(ref me.selfMapEntry.UseCount);
-                    if (me.selfMapEntry.UseCount == 1)
-                        Interlocked.Increment(ref compressionUniqueCount[(int)me.selfMapEntry.comptype]);
                 }
-                // there are just here for reporting statistics to the UI
-                Interlocked.Increment(ref compressionSelfCount[(int)me.selfMapEntry.comptype]);
-                Interlocked.Increment(ref totalFound);
+                else
+                {
+                    lock (me.selfMapEntry)
+                    {
+                        // this is the value that is actually needed, the rest are just for display info.
+                        Interlocked.Increment(ref me.selfMapEntry.UseCount);
+                        if (me.selfMapEntry.UseCount == 1)
+                            Interlocked.Increment(ref compressionUniqueCount[(int)me.selfMapEntry.comptype]);
+                    }
+
+                    Interlocked.Increment(ref compressionSelfCount[(int)me.selfMapEntry.comptype]);
+                    Interlocked.Increment(ref totalFound);
+                }
             });
 
-            Console.WriteLine($"Total Blocks {chd.map.Length}, Repeat Blocks {totalFound}, Output Block Size {chd.blocksize}");
-            for (int i = 0; i < 5; i++)
+            if (consoleOut != null)
             {
-                if (compressionCount[i] == 0 & compressionSelfCount[i] == 0)
-                    continue;
-                string comp = "";
-                if (i < chd.compression.Length)
+                consoleOut.Invoke($"Total Blocks {chd.map.Length},  Repeat Blocks {totalFound},  Output Block Size {chd.blocksize}");
+                for (int i = 0; i < 5; i++)
                 {
-                    comp = chd.compression[i].ToString().Substring(10);
-                }
-                else if (i == 4)
-                {
-                    comp = "NONE";
-                }
+                    if (compressionCount[i] == 0 & compressionSelfCount[i] == 0)
+                        continue;
+                    string comp = "";
+                    if (i < chd.compression.Length)
+                    {
+                        comp = chd.compression[i].ToString().Substring(10);
+                    }
+                    else if (i == 4)
+                    {
+                        comp = "NONE";
+                    }
 
-                Console.WriteLine($"Compression {i} : {comp} : Block Count {compressionCount[i]}  ,Repeat Source Block Count {compressionUniqueCount[i]}, Repeat Total Block Count {compressionSelfCount[i]}");
+                    consoleOut?.Invoke($"Compression {i} : {comp} : Block Count {compressionCount[i]},  Repeat Source Block Count {compressionUniqueCount[i]},  Repeat Total Block Count {compressionSelfCount[i]}");
+                }
             }
         }
 
-        internal static void KeepMostRepeatedBlocks(CHDHeader chd,int blocksToKeep)
+        internal static void KeepMostRepeatedBlocks(CHDHeader chd, int blocksToKeep, Message consoleOut)
         {
             List<mapentry> mapentries = new List<mapentry>();
             foreach (mapentry me in chd.map)
@@ -85,7 +96,8 @@ namespace CHDSharpLib
                     mapentries.Add(me);
                 }
             }
-            Console.WriteLine($"{mapentries.Count} repeated used blocks");
+
+            consoleOut?.Invoke($"{mapentries.Count} repeated used blocks");
             if (mapentries.Count < blocksToKeep)
                 return;
 

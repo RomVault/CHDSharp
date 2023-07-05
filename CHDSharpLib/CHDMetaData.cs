@@ -11,7 +11,7 @@ internal static class CHDMetaData
 {
     internal static uint CHD_MDFLAGS_CHECKSUM = 0x01;        // indicates data is checksummed
 
-    internal static chd_error ReadMetaData(Stream file, CHDHeader chd)
+    internal static chd_error ReadMetaData(Stream file, CHDHeader chd, Message consoleOut)
     {
         using BinaryReader br = new BinaryReader(file, Encoding.UTF8, true);
 
@@ -35,11 +35,14 @@ internal static class CHDMetaData
             byte[] metaData = new byte[metaLength];
             file.Read(metaData, 0, metaData.Length);
 
-            Console.WriteLine($"{(char)((metaTag >> 24) & 0xFF)}{(char)((metaTag >> 16) & 0xFF)}{(char)((metaTag >> 8) & 0xFF)}{(char)((metaTag >> 0) & 0xFF)}  Length: {metaLength}");
-            if (Util.isAscii(metaData))
-                Console.WriteLine($"Data: {Encoding.ASCII.GetString(metaData)}");
-            else
-                Console.WriteLine($"Data: Binary Data Length {metaData.Length}");
+            if (consoleOut != null)
+            {
+                consoleOut?.Invoke($"{(char)((metaTag >> 24) & 0xFF)}{(char)((metaTag >> 16) & 0xFF)}{(char)((metaTag >> 8) & 0xFF)}{(char)((metaTag >> 0) & 0xFF)}  Length: {metaLength}");
+                if (Util.isAscii(metaData))
+                    consoleOut?.Invoke($"Data: {Encoding.ASCII.GetString(metaData)}");
+                else
+                    consoleOut?.Invoke($"Data: Binary Data Length {metaData.Length}");
+            }
 
             // take the 4 byte metaTag, and the metaData
             // SHA1 the metaData to 20 byte SHA1
