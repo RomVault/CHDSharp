@@ -63,7 +63,7 @@ public delegate void FileMessage(string filename, string message);
 
 public static class CHD
 {
-    public static Message FileProcessInfo; // returns the name of the file being processed
+    public static Message fileProcessInfo; // returns the name of the file being processed
     public static Message progress; // returns the progress of the file
     public static Message consoleOut;
     public static int taskCount = 8;
@@ -141,7 +141,7 @@ public static class CHD
         {
             strComp += $", {chd.compression[i].ToString().Substring(10)}";
         }
-        FileProcessInfo?.Invoke($"{Path.GetFileName(filename)}, V:{version} {strComp}");
+        fileProcessInfo?.Invoke($"{Path.GetFileName(filename)}, V:{version} {strComp}");
 
         CHDBlockRead.FindBlockReaders(chd);
         CHDBlockRead.FindRepeatedBlocks(chd, consoleOut);
@@ -208,44 +208,52 @@ public static class CHD
 
         byte[] buffer = new byte[chd.blocksize];
 
-        int block = 0;
-        ulong sizetoGo = chd.totalbytes;
-        while (sizetoGo > 0)
+        try
         {
-            /* progress */
-            if ((block % 1000) == 0)
-                progress?.Invoke($"Verifying, {(100 - sizetoGo * 100 / chd.totalbytes):N1}% complete...\r");
-
-            mapentry mapEntry = chd.map[block];
-            if (mapEntry.length > 0)
+            int block = 0;
+            ulong sizetoGo = chd.totalbytes;
+            while (sizetoGo > 0)
             {
-                mapEntry.buffIn = arrPool.Rent();
-                file.Seek((long)mapEntry.offset, System.IO.SeekOrigin.Begin);
-                file.Read(mapEntry.buffIn, 0, (int)mapEntry.length);
+                /* progress */
+                if ((block % 1000) == 0)
+                    progress?.Invoke($"Verifying, {(100 - sizetoGo * 100 / chd.totalbytes):N1}% complete...\r");
+
+                mapentry mapEntry = chd.map[block];
+                if (mapEntry.length > 0)
+                {
+                    mapEntry.buffIn = arrPool.Rent();
+                    file.Seek((long)mapEntry.offset, System.IO.SeekOrigin.Begin);
+                    file.Read(mapEntry.buffIn, 0, (int)mapEntry.length);
+                }
+
+                /* read the block into the cache */
+                chd_error err = CHDBlockRead.ReadBlock(mapEntry, arrPool, chd.chdReader, codec, buffer, (int)chd.blocksize);
+                if (err != chd_error.CHDERR_NONE)
+                    return err;
+
+                if (mapEntry.length > 0)
+                {
+                    arrPool.Return(mapEntry.buffIn);
+                    mapEntry.buffIn = null;
+                }
+
+                int sizenext = sizetoGo > (ulong)chd.blocksize ? (int)chd.blocksize : (int)sizetoGo;
+
+                md5Check?.TransformBlock(buffer, 0, sizenext, null, 0);
+                sha1Check?.TransformBlock(buffer, 0, sizenext, null, 0);
+
+                /* prepare for the next block */
+                block++;
+                sizetoGo -= (ulong)sizenext;
+
             }
-
-            /* read the block into the cache */
-            chd_error err = CHDBlockRead.ReadBlock(mapEntry, arrPool, chd.chdReader, codec, buffer, (int)chd.blocksize);
-            if (err != chd_error.CHDERR_NONE)
-                return err;
-
-            if (mapEntry.length > 0)
-            {
-                arrPool.Return(mapEntry.buffIn);
-                mapEntry.buffIn = null;
-            }
-
-            int sizenext = sizetoGo > (ulong)chd.blocksize ? (int)chd.blocksize : (int)sizetoGo;
-
-            md5Check?.TransformBlock(buffer, 0, sizenext, null, 0);
-            sha1Check?.TransformBlock(buffer, 0, sizenext, null, 0);
-
-            /* prepare for the next block */
-            block++;
-            sizetoGo -= (ulong)sizenext;
-
+            progress?.Invoke($"Verifying, 100.0% complete...");
         }
-        progress?.Invoke($"Verifying, 100.0% complete...");
+        catch (Exception e)
+        {
+            consoleOut?.Invoke(e.Message);
+            return chd_error.CHDERR_DECOMPRESSION_ERROR;
+        }
 
         byte[] tmp = new byte[0];
         md5Check?.TransformFinalBlock(tmp, 0, 0);
@@ -287,7 +295,7 @@ public static class CHD
         ArrayPool arrPoolCache = new ArrayPool(chd.blocksize);
 
         int blocksToKeep = (1024 * 1024 * 512) / (int)chd.blocksize;
-        Semaphore aheadLock = new Semaphore(blocksToKeep, blocksToKeep);
+        SemaphoreSlim aheadLock = new SemaphoreSlim(blocksToKeep, blocksToKeep);
 
         Task producerThread = Task.Factory.StartNew(() =>
         {
@@ -356,7 +364,7 @@ public static class CHD
                     CHDCodec codec = new CHDCodec();
                     while (true)
                     {
-                        aheadLock.WaitOne();
+                        aheadLock.Wait(ct);
                         int block = blocksToDecompress.Take(ct);
                         if (block == -1)
                             return;
@@ -369,7 +377,7 @@ public static class CHD
                             errMaster = err;
                             return;
                         }
-                        blocksToHash.Add(block);
+                        blocksToHash.Add(block, ct);
 
                         if (mapentry.length > 0)
                         {
